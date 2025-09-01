@@ -15,6 +15,7 @@ The project is configured for Cloudflare Pages deployment with the following set
 - **Build command**: `yarn build`
 - **Build output directory**: `out` (configured in next.config.mjs)
 - **Root directory**: `/` (leave empty)
+- **Node.js version**: 22.16.0 (specified in `.nvmrc`)
 
 ### Environment Variables
 No environment variables are required for basic deployment, but you may want to add:
@@ -65,6 +66,20 @@ The project uses **Yarn** as the package manager, specified in `package.json`:
 - Ensure Node.js version is 22.16.0
 - Check that all dependencies are properly installed
 - Verify that the build command is `yarn build`
+
+**"Cannot install with frozen-lockfile" Error**
+- ✅ **Fixed**: Removed outdated `pnpm-lock.yaml`
+- ✅ **Fixed**: Added `"packageManager": "yarn@1.22.22"` to `package.json`
+- ✅ **Fixed**: Regenerated `yarn.lock`
+
+**"Missing entry-point to Worker script" Error**
+- ✅ **Fixed**: Removed `wrangler.toml` that was causing Cloudflare to detect this as a Workers project
+- ✅ **Fixed**: Configured Next.js for static export with `output: 'export'`
+- ✅ **Fixed**: Added `generateStaticParams()` to dynamic routes
+
+**Next.js 15 "params should be awaited" Error**
+- ✅ **Fixed**: Made page components async and awaited `params` object
+- ✅ **Fixed**: Updated TypeScript interfaces to reflect Promise-based params
 
 **Static Asset Issues**
 - The `next.config.mjs` has `images: { unoptimized: true }` for Cloudflare compatibility
