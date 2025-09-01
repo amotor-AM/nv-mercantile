@@ -1,0 +1,16 @@
+name = "nv-mercantile"
+compatibility_date = "2024-09-01"
+
+# Pages build configuration
+[build]
+command = "yarn build"
+cwd = "."
+
+[build.environment_variables]
+NODE_VERSION = "22.16.0"
+
+# Pages deployment - not a Worker
+pages_build_output_dir = "out"
+
+[vars]
+NODE_ENV = "production"
