@@ -1,0 +1,67 @@
+{
+  "categories": [
+    {
+      "id": "machined-parts",
+      "name": "Machined Parts",
+      "description": "Precision CNC machined components with tight tolerances",
+      "productCount": 5,
+      "priceRange": {
+        "min": 28.50,
+        "max": 420.00
+      },
+      "materials": ["Aluminum", "Titanium", "Stainless Steel", "Brass"],
+      "applications": ["Aerospace", "Medical", "Industrial", "Automotive"],
+      "leadTime": "1-4 weeks"
+    },
+    {
+      "id": "metalwork",
+      "name": "Metalwork",
+      "description": "Handcrafted metal components and artistic pieces",
+      "productCount": 5,
+      "priceRange": {
+        "min": 145.00,
+        "max": 450.00
+      },
+      "materials": ["Steel", "Stainless Steel", "Brass", "Wrought Iron"],
+      "applications": ["Architectural", "Decorative", "Construction", "Marine"],
+      "leadTime": "2-6 weeks"
+    },
+    {
+      "id": "3d-prints",
+      "name": "3D Prints",
+      "description": "High-quality additive manufacturing services",
+      "productCount": 5,
+      "priceRange": {
+        "min": 55.00,
+        "max": 180.00
+      },
+      "materials": ["Nylon", "ABS", "PETG", "Engineering Resin"],
+      "applications": ["Prototyping", "Production", "Custom Parts", "Testing"],
+      "leadTime": "1-3 weeks"
+    },
+    {
+      "id": "custom-orders",
+      "name": "Custom Orders",
+      "description": "Bespoke solutions tailored to your specific needs",
+      "productCount": 5,
+      "priceRange": {
+        "min": 850.00,
+        "max": 3500.00
+      },
+      "materials": ["Custom Selection"],
+      "applications": ["Art", "Engineering", "Architecture", "Manufacturing"],
+      "leadTime": "4-16 weeks"
+    }
+  ],
+  "totalProducts": 20,
+  "company": {
+    "name": "NV Mercantile",
+    "description": "High-quality machined parts, bespoke handmade metalwork, and premium 3D prints",
+    "specialties": [
+      "Precision Manufacturing",
+      "Custom Metalwork",
+      "Additive Manufacturing",
+      "Engineering Solutions"
+    ]
+  }
+} 
