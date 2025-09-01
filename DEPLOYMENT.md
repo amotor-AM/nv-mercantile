@@ -12,8 +12,8 @@ This guide explains how to deploy the NV Mercantile application to Cloudflare Pa
 The project is configured for Cloudflare Pages deployment with the following settings:
 
 ### Build Settings
-- **Build command**: `npm run build` or `yarn build`
-- **Build output directory**: `.next` (handled automatically by Next.js)
+- **Build command**: `yarn build`
+- **Build output directory**: `out` (configured in next.config.mjs)
 - **Root directory**: `/` (leave empty)
 
 ### Environment Variables
@@ -84,6 +84,10 @@ const nextConfig = {
   images: {
     unoptimized: true, // Required for static deployment platforms
   },
+  // Cloudflare Pages configuration
+  trailingSlash: true,
+  output: 'export', // Static export for Cloudflare Pages
+  distDir: 'out', // Output directory for static files
 }
 ```
 
