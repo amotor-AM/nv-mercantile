@@ -1,17 +1,13 @@
-import { Header } from "@/components/header"
-import { HeroSection } from "@/components/hero-section"
+import { PageTemplate } from "@/components/templates"
+import { HeroSection } from "@/components/organisms"
 import { FeaturedSections } from "@/components/featured-sections"
 import { ProductShowcase } from "@/components/product-showcase"
-import { Footer } from "@/components/footer"
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen">
-      <Header />
-      <HeroSection />
+    <PageTemplate showHero={true} heroSection={<HeroSection />}>
       <FeaturedSections />
       <ProductShowcase />
-      <Footer />
-    </main>
+    </PageTemplate>
   )
 }
