@@ -43,8 +43,9 @@ The project uses **Yarn** as the package manager, specified in `package.json`:
 2. **Configure Build Settings**
    - **Project name**: `nv-mercantile` (or your preferred name)
    - **Production branch**: `main`
+   - **Framework preset**: `Next.js (Static HTML Export)`
    - **Build command**: `yarn build`
-   - **Build output directory**: Leave empty (Next.js handles this)
+   - **Build output directory**: `out`
    - **Root directory**: Leave empty
 
 3. **Environment Variables** (Optional)
