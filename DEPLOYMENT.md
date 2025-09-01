@@ -11,8 +11,9 @@ This guide explains how to deploy the NV Mercantile application to Cloudflare Pa
 
 The project is configured for Cloudflare Pages deployment with the following settings:
 
-### Build Settings
-- **Build command**: `yarn build`
+### Build Settings (Auto-detected by Cloudflare Pages)
+- **Framework**: Next.js (auto-detected)
+- **Build command**: `yarn build` (auto-detected)
 - **Build output directory**: `out` (configured in next.config.mjs)
 - **Root directory**: `/` (leave empty)
 - **Node.js version**: 22.16.0 (specified in `.nvmrc`)
@@ -73,7 +74,8 @@ The project uses **Yarn** as the package manager, specified in `package.json`:
 - ✅ **Fixed**: Regenerated `yarn.lock`
 
 **"Missing entry-point to Worker script" Error**
-- ✅ **Fixed**: Added Pages-specific `wrangler.toml` with `pages_build_output_dir = "out"`
+- ✅ **Fixed**: Removed `wrangler.toml` entirely to allow auto-detection
+- ✅ **Fixed**: Cloudflare Pages now auto-detects Next.js project
 - ✅ **Fixed**: Added `_headers` and `_redirects` files for Pages detection
 - ✅ **Fixed**: Configured Next.js for static export with `output: 'export'`
 - ✅ **Fixed**: Added `generateStaticParams()` to dynamic routes
