@@ -1,4 +1,0 @@
-# Cloudflare Pages Redirects
-# This file indicates this is a Pages deployment
-# Redirect trailing slashes
-/* /index.html 200
