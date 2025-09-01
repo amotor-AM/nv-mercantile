@@ -9,11 +9,12 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Cloudflare Pages static export configuration
+  // Force static export - NOT SSR
   output: 'export',
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
-  distDir: 'dist',
+  distDir: 'out',
+  // Disable server features to ensure static export
 }
 
 export default nextConfig
