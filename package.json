@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "scripts": {
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start",
-    "export": "next export"
+    "start": "next start"
   },
   "dependencies": {
     "@clerk/nextjs": "latest",

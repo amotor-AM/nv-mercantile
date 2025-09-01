@@ -9,11 +9,11 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Cloudflare Pages configuration
-  trailingSlash: true,
-  // Output configuration for static deployment
+  // Cloudflare Pages static export configuration
   output: 'export',
-  distDir: 'out',
+  trailingSlash: true,
+  skipTrailingSlashRedirect: true,
+  distDir: 'dist',
 }
 
 export default nextConfig
