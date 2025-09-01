@@ -73,7 +73,8 @@ The project uses **Yarn** as the package manager, specified in `package.json`:
 - ✅ **Fixed**: Regenerated `yarn.lock`
 
 **"Missing entry-point to Worker script" Error**
-- ✅ **Fixed**: Removed `wrangler.toml` that was causing Cloudflare to detect this as a Workers project
+- ✅ **Fixed**: Added Pages-specific `wrangler.toml` with `pages_build_output_dir = "out"`
+- ✅ **Fixed**: Added `_headers` and `_redirects` files for Pages detection
 - ✅ **Fixed**: Configured Next.js for static export with `output: 'export'`
 - ✅ **Fixed**: Added `generateStaticParams()` to dynamic routes
 
