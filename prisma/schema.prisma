@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = env("DATABASE_PROVIDER")
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  clerkId   String?  @unique
+  role      Role     @default(CUSTOMER)
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id             String       @id @default(cuid())
+  slug           String       @unique
+  name           String
+  subtitle       String
+  price          Float
+  rating         Float        @default(0)
+  reviewCount    Int          @default(0)
+  material       String
+  finish         String?
+  tolerance      String?
+  dimensions     String
+  weight         String
+  image          String
+  description    String
+  specifications Json
+  applications   String[]
+  leadTime       String
+  minimumOrder   Int
+  inStock        Boolean      @default(true)
+  category       String
+  orderItems     OrderItem[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Order {
+  id              String       @id @default(cuid())
+  orderNumber     String       @unique
+  user            User?        @relation(fields: [userId], references: [id])
+  userId          String?
+  email           String
+  status          OrderStatus  @default(PENDING)
+  total           Int          // store in cents
+  currency        String       @default("usd")
+  paymentProvider String?
+  paymentIntentId String?
+  refundStatus    RefundStatus @default(NONE)
+  items           OrderItem[]
+  shippingName    String?
+  shippingPhone   String?
+  shippingAddress String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  name      String
+  price     Int      // in cents
+  quantity  Int
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  CUSTOMER
+}
+
+enum OrderStatus {
+  PENDING
+  AWAITING_PAYMENT
+  PAID
+  FULFILLED
+  CANCELLED
+  REFUNDED
+}
+
+enum RefundStatus {
+  NONE
+  REQUESTED
+  PARTIAL
+  FULL
+}

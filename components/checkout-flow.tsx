@@ -6,7 +6,6 @@ import { getProductById } from "@/lib/product-data"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
 import { ShoppingBag, Info } from "lucide-react"
 import Link from "next/link"
@@ -33,7 +32,7 @@ interface CheckoutFormData {
 }
 
 export function CheckoutFlow() {
-  const { items, getTotalItems, getTotalPrice, clearCart } = useCartStore()
+  const { items, getTotalPrice, clearCart } = useCartStore()
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -43,7 +42,7 @@ export function CheckoutFlow() {
     lastName: "",
     address: "",
     phoneNumber: "",
-    paymentMethod: "card",
+    paymentMethod: "stripe",
     cardNumber: "",
     expiryDate: "",
     cvv: "",
@@ -61,16 +60,6 @@ export function CheckoutFlow() {
   const shipping = 8.0
   const tax = 0.0
   const total = subtotal + shipping + tax
-
-  const handlePlaceOrder = () => {
-    // Placeholder for order placement logic
-    setIsProcessing(true)
-    setTimeout(() => {
-      setIsProcessing(false)
-      clearCart()
-      router.push("/order-confirmation")
-    }, 2000)
-  }
 
   if (items.length === 0) {
     return (
@@ -202,6 +191,26 @@ export function CheckoutFlow() {
             <div className="space-y-6">
               <h2 className="text-2xl font-medium">Payment Information</h2>
               
+              <div className="space-y-3">
+                <Label>Payment Method</Label>
+                <div className="flex gap-3">
+                  <button
+                    className={`px-3 py-2 rounded border ${formData.paymentMethod === "stripe" ? "border-primary" : "border-gray-200"}`}
+                    onClick={() => handleInputChange("paymentMethod", "stripe")}
+                    type="button"
+                  >
+                    Stripe
+                  </button>
+                  <button
+                    className={`px-3 py-2 rounded border ${formData.paymentMethod === "paypal" ? "border-primary" : "border-gray-200"}`}
+                    onClick={() => handleInputChange("paymentMethod", "paypal")}
+                    type="button"
+                  >
+                    PayPal
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="cardNumber">Card Number</Label>
                 <Input
@@ -287,7 +296,7 @@ export function CheckoutFlow() {
                       <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
                         <span className="text-sm font-medium">💳</span>
                       </div>
-                      <span>Credit Card</span>
+                      <span className="capitalize">{formData.paymentMethod}</span>
                     </div>
                     <button className="text-sm text-blue-600 underline">
                       Edit
@@ -304,7 +313,68 @@ export function CheckoutFlow() {
                 </p>
 
                 <Button
-                  onClick={handlePlaceOrder}
+                  onClick={async () => {
+                    setIsProcessing(true)
+                    try {
+                      const orderRes = await fetch("/api/orders", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          email: formData.email,
+                          items: items.map((i) => ({
+                            productId: i.id,
+                            name: i.name,
+                            price: i.price,
+                            quantity: i.quantity,
+                          })),
+                          shipping: {
+                            name: `${formData.firstName} ${formData.lastName}`,
+                            phone: formData.phoneNumber,
+                            address: formData.address,
+                          },
+                        }),
+                      })
+                      if (!orderRes.ok) throw new Error("Failed to create order")
+                      const order = await orderRes.json()
+                      try {
+                        window.localStorage.setItem("nv-mercantile-email", formData.email)
+                      } catch {}
+
+                      if (formData.paymentMethod === "stripe") {
+                        const s = await fetch("/api/checkout/stripe", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ orderId: order.id }),
+                        })
+                        if (s.ok) {
+                          // Proceed to confirmation; capture via webhooks
+                          clearCart()
+                          router.push("/order-confirmation")
+                          return
+                        }
+                      } else if (formData.paymentMethod === "paypal") {
+                        const p = await fetch("/api/checkout/paypal", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ orderId: order.id }),
+                        })
+                        if (p.ok) {
+                          const data = await p.json()
+                          if (data.approveUrl) {
+                            window.location.href = data.approveUrl
+                            return
+                          }
+                        }
+                      }
+                      // Default: go to confirmation
+                      clearCart()
+                      router.push("/order-confirmation")
+                    } catch (e) {
+                      console.error(e)
+                    } finally {
+                      setIsProcessing(false)
+                    }
+                  }}
                   disabled={isProcessing}
                   className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300"
                 >
