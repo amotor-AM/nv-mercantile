@@ -12,7 +12,7 @@ export default auth((req) => {
       return NextResponse.redirect(url)
     }
     const role = (req.auth as any).user?.role
-    if (role !== "ADMIN") {
+    if (!["ADMIN", "MANAGER"].includes(role)) {
       return NextResponse.redirect(new URL("/", nextUrl.origin))
     }
   }

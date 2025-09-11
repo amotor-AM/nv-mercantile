@@ -17,6 +17,7 @@ model User {
   orders        Order[]
   accounts      Account[]
   sessions      Session[]
+  tickets       SupportTicket[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -68,6 +69,10 @@ model Order {
   shippingName    String?
   shippingPhone   String?
   shippingAddress String?
+  trackingCarrier String?
+  trackingNumber  String?
+  trackingUrl     String?
+  shippedAt       DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 }
@@ -92,6 +97,27 @@ model InventoryMovement {
   quantity  Int            // positive for restock/adjustment, negative for sale
   note      String?
   createdAt DateTime       @default(now())
+}
+
+model SupportTicket {
+  id        String           @id @default(cuid())
+  user      User?            @relation(fields: [userId], references: [id])
+  userId    String?
+  email     String
+  subject   String
+  status    TicketStatus     @default(OPEN)
+  messages  SupportMessage[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model SupportMessage {
+  id        String       @id @default(cuid())
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId  String
+  author    MessageAuthor
+  body      String
+  createdAt DateTime      @default(now())
 }
 
 model Account {
@@ -132,6 +158,9 @@ model VerificationToken {
 
 enum Role {
   ADMIN
+  MANAGER
+  SUPPORT
+  WAREHOUSE
   CUSTOMER
 }
 
@@ -155,4 +184,15 @@ enum MovementType {
   SALE
   RESTOCK
   ADJUSTMENT
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+}
+
+enum MessageAuthor {
+  CUSTOMER
+  AGENT
 }

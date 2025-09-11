@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db"
 
 export async function POST(req: NextRequest, { params }: { params: { productId: string } }) {
   const session = await auth()
-  if ((session as any)?.user?.role !== "ADMIN") {
+  const role = (session as any)?.user?.role
+  if (!["ADMIN", "MANAGER"].includes(role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

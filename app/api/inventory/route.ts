@@ -4,7 +4,8 @@ import { auth } from "@/auth"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
-  if ((session as any)?.user?.role !== "ADMIN") {
+  const role = (session as any)?.user?.role
+  if (!["ADMIN", "MANAGER"].includes(role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   const { searchParams } = new URL(req.url)

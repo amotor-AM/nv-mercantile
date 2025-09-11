@@ -17,6 +17,8 @@ type Order = {
   createdAt: string
   shippingName: string | null
   shippingAddress: string | null
+  trackingUrl?: string | null
+  trackingNumber?: string | null
   items: { id: string; name: string; price: number; quantity: number }[]
 }
 
@@ -181,13 +183,22 @@ export function OrderConfirmation() {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-12">
-          <Button variant="outline" size="lg" className="flex-1">
-            <Download className="w-4 h-4 mr-2" />
-            Download Receipt
-          </Button>
-          <Button variant="outline" size="lg" className="flex-1">
-            Track Order
-          </Button>
+          <a
+            className="flex-1"
+            href={order ? `/api/orders/${order.id}/invoice.pdf` : "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="outline" size="lg" className="w-full">
+              <Download className="w-4 h-4 mr-2" />
+              Download Receipt
+            </Button>
+          </a>
+          <a className="flex-1" href={order?.trackingUrl || "#"} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="lg" className="w-full" disabled={!order?.trackingUrl}>
+              Track Order
+            </Button>
+          </a>
         </div>
 
         <div className="text-center">
@@ -201,8 +212,8 @@ export function OrderConfirmation() {
         <div className="text-center mt-16 pt-8 border-t">
           <p className="text-muted-foreground mb-4">Need help with your order?</p>
           <div className="flex justify-center gap-6">
-            <button className="underline underline-offset-4 hover:text-foreground transition-colors">Contact Support</button>
-            <button className="underline underline-offset-4 hover:text-foreground transition-colors">Return Policy</button>
+            <a href="/account/support" className="underline underline-offset-4 hover:text-foreground transition-colors">Contact Support</a>
+            <a href="/custom-orders" className="underline underline-offset-4 hover:text-foreground transition-colors">Return Policy</a>
           </div>
         </div>
       </div>
