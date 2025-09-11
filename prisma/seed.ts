@@ -49,6 +49,9 @@ async function seedProducts(list: ProductJson[]) {
         leadTime: p.leadTime,
         minimumOrder: p.minimumOrder,
         inStock: p.inStock,
+        stockLevel: { set: 100 },
+        safetyStock: { set: 20 },
+        reorderPoint: { set: 40 },
         category: p.category,
       },
       create: {
@@ -70,6 +73,9 @@ async function seedProducts(list: ProductJson[]) {
         leadTime: p.leadTime,
         minimumOrder: p.minimumOrder,
         inStock: p.inStock,
+        stockLevel: 100,
+        safetyStock: 20,
+        reorderPoint: 40,
         category: p.category,
       },
     })

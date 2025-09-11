@@ -41,8 +41,13 @@ model Product {
   leadTime       String
   minimumOrder   Int
   inStock        Boolean      @default(true)
+  stockLevel     Int          @default(0)
+  safetyStock    Int          @default(0)
+  reorderPoint   Int          @default(0)
+  leadTimeDays   Int          @default(7)
   category       String
   orderItems     OrderItem[]
+  movements      InventoryMovement[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
@@ -77,6 +82,16 @@ model OrderItem {
   price     Int      // in cents
   quantity  Int
   createdAt DateTime @default(now())
+}
+
+model InventoryMovement {
+  id        String         @id @default(cuid())
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  type      MovementType
+  quantity  Int            // positive for restock/adjustment, negative for sale
+  note      String?
+  createdAt DateTime       @default(now())
 }
 
 model Account {
@@ -134,4 +149,10 @@ enum RefundStatus {
   REQUESTED
   PARTIAL
   FULL
+}
+
+enum MovementType {
+  SALE
+  RESTOCK
+  ADJUSTMENT
 }

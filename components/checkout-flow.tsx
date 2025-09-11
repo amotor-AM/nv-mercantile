@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator"
 import { ShoppingBag, Info } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js"
+import { Elements, PaymentElement, useElements, useStripe, PaymentRequestButtonElement } from "@stripe/react-stripe-js"
 import { stripePromise } from "@/lib/stripe-client"
 import { track } from "@vercel/analytics"
 
@@ -31,6 +31,70 @@ function StripePaymentSection({ clientSecret }: { clientSecret: string | null })
   return (
     <div className="border rounded-lg p-4">
       <PaymentElement />
+    </div>
+  )
+}
+
+function PaymentRequestExpress({
+  clientSecret,
+  orderId,
+  amount,
+  onSuccess,
+}: {
+  clientSecret: string
+  orderId: string
+  amount: number // cents
+  onSuccess: () => void
+}) {
+  const stripe = useStripe()
+  const [paymentRequest, setPaymentRequest] = useState<any>(null)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    async function init() {
+      if (!stripe || !clientSecret) return
+      const pr = stripe.paymentRequest({
+        country: "US",
+        currency: "usd",
+        total: { label: "NV Mercantile", amount },
+        requestPayerEmail: true,
+        requestPayerName: true,
+      })
+      const result = await pr.canMakePayment()
+      if (result && mounted) {
+        pr.on("paymentmethod", async (ev: any) => {
+          try {
+            // confirm payment using provided method
+            const { error } = await stripe.confirmCardPayment(clientSecret, {
+              payment_method: ev.paymentMethod.id,
+            }, { handleActions: true })
+            if (error) {
+              ev.complete("fail")
+              return
+            }
+            ev.complete("success")
+            onSuccess()
+          } catch (e) {
+            ev.complete("fail")
+          }
+        })
+        setPaymentRequest(pr)
+        setReady(true)
+      }
+    }
+    init()
+    return () => {
+      mounted = false
+    }
+  }, [stripe, clientSecret, amount, onSuccess])
+
+  if (!ready || !paymentRequest) return null
+
+  return (
+    <div className="border rounded-lg p-4">
+      <div className="mb-3 text-sm text-muted-foreground">Or pay instantly</div>
+      <PaymentRequestButtonElement options={{ paymentRequest }} />
     </div>
   )
 }
@@ -362,6 +426,18 @@ export function CheckoutFlow() {
                           </button>
                         </div>
                       </div>
+
+                      {orderId && clientSecret ? (
+                        <PaymentRequestExpress
+                          clientSecret={clientSecret}
+                          orderId={orderId}
+                          amount={Math.round(total * 100)}
+                          onSuccess={() => {
+                            clearCart()
+                            router.push(`/order-confirmation?order=${orderId}`)
+                          }}
+                        />
+                      ) : null}
 
                       <div className="border rounded-lg p-4">
                         <PaymentElement />

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import Stripe from "stripe"
 import { auth } from "@/auth"
+import { sendRefundEmail } from "@/lib/email"
 
 export async function POST(_: Request, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -20,5 +21,9 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
   }
 
   await prisma.order.update({ where: { id: order.id }, data: { status: "REFUNDED", refundStatus: "FULL" } })
+  try {
+    await sendRefundEmail(order.id)
+  } catch {}
+
   return NextResponse.json({ ok: true })
 }

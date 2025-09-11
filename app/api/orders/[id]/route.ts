@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
+import { sendOrderShippedEmail } from "@/lib/email"
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -27,5 +28,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const status = body.status as string | undefined
   if (!status) return NextResponse.json({ error: "status required" }, { status: 400 })
   const order = await prisma.order.update({ where: { id: params.id }, data: { status } as any })
+
+  if (status === "FULFILLED") {
+    try {
+      await sendOrderShippedEmail(order.id)
+    } catch {}
+  }
+
   return NextResponse.json(order)
 }

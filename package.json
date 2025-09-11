@@ -79,7 +79,9 @@
     "stripe": "^16.6.0",
     "@paypal/checkout-server-sdk": "^1.0.4",
     "@stripe/react-stripe-js": "^2.7.3",
-    "@stripe/stripe-js": "^4.6.0"
+    "@stripe/stripe-js": "^4.6.0",
+    "resend": "^4.0.0",
+    "@react-email/render": "^0.0.17"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",

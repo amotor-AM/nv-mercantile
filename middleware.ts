@@ -7,7 +7,7 @@ export default auth((req) => {
 
   if (isAdmin) {
     if (!req.auth) {
-      const url = new URL("/api/auth/signin", nextUrl.origin)
+      const url = new URL("/signin", nextUrl.origin)
       url.searchParams.set("callbackUrl", nextUrl.href)
       return NextResponse.redirect(url)
     }

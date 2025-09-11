@@ -1,12 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import useSWR from "swr"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Grid3X3, List } from "lucide-react"
 import Link from "next/link"
-import { getProductsByCategory } from "@/lib/product-data"
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 interface ProductGridProps {
   category: string
@@ -16,21 +18,13 @@ export function ProductGrid({ category }: ProductGridProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [sortBy, setSortBy] = useState<string>("featured")
 
-  const categoryProducts = getProductsByCategory(category)
+  const sortParam =
+    sortBy === "price-low" ? "price_asc" :
+    sortBy === "price-high" ? "price_desc" :
+    sortBy === "newest" ? "newest" : undefined
 
-  const sortedProducts = [...categoryProducts].sort((a, b) => {
-    switch (sortBy) {
-      case "price-low":
-        return a.price - b.price
-      case "price-high":
-        return b.price - a.price
-      case "newest":
-        // Since we don't have createdAt, just return original order
-        return 0
-      default:
-        return 0
-    }
-  })
+  const { data } = useSWR(`/api/products?category=${encodeURIComponent(category)}&pageSize=60${sortParam ? `&sort=${sortParam}` : ""}`, fetcher)
+  const products = data?.items ?? []
 
   return (
     <div className="space-y-6">
@@ -38,7 +32,7 @@ export function ProductGrid({ category }: ProductGridProps) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold capitalize">
-            {category.replace("-", " ")} ({sortedProducts.length})
+            {category.replace("-", " ")} ({products.length})
           </h2>
           <p className="text-muted-foreground">Find your perfect solution</p>
         </div>
@@ -82,7 +76,7 @@ export function ProductGrid({ category }: ProductGridProps) {
 
       {/* Products Grid */}
       <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
-        {sortedProducts.map((product) => (
+        {products.map((product: any) => (
           <Card
             key={product.id}
             className="group cursor-pointer border-0 shadow-none bg-card hover:shadow-lg transition-shadow overflow-hidden"

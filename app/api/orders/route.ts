@@ -55,6 +55,17 @@ export async function POST(req: NextRequest) {
   })
   const productMap = new Map(products.map((p) => [p.id, p]))
 
+  const allowBackorder = (process.env.ALLOW_BACKORDER || "false").toLowerCase() === "true"
+  if (!allowBackorder) {
+    for (const it of items) {
+      const p = productMap.get(it.productId)
+      if (!p) return NextResponse.json({ error: `Invalid product ${it.productId}` }, { status: 400 })
+      if ((p.stockLevel ?? 0) < it.quantity) {
+        return NextResponse.json({ error: "Insufficient stock", productId: p.id }, { status: 409 })
+      }
+    }
+  }
+
   const orderItems = items.map((i) => {
     const p = productMap.get(i.productId)
     if (!p) throw new Error("Invalid product: " + i.productId)

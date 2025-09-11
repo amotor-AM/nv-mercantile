@@ -1,8 +1,10 @@
 import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
 import Google from "next-auth/providers/google"
+import Email from "next-auth/providers/email"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "./lib/db"
+import { sendSignInEmail } from "./lib/email"
 
 export const {
   handlers: { GET, POST },
@@ -25,6 +27,12 @@ export const {
       clientSecret: process.env.GOOGLE_SECRET || "",
       allowDangerousEmailAccountLinking: true,
     }),
+    Email({
+      async sendVerificationRequest(params) {
+        const { identifier, url } = params
+        await sendSignInEmail(identifier, url)
+      },
+    }),
   ],
   callbacks: {
     session: async ({ session, user }) => {
@@ -45,7 +53,6 @@ export const {
     },
   },
   trustHost: true,
-  // Define pages if you want custom ones later (using defaults for now)
 })
 
 export type AuthUser = Awaited<ReturnType<typeof auth>> extends { user: infer U } ? U : never

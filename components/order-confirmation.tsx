@@ -26,6 +26,8 @@ export function OrderConfirmation() {
   const [loading, setLoading] = useState(true)
   const params = useSearchParams()
   const orderId = params.get("order")
+  const provider = params.get("provider")
+  const paypalToken = params.get("token")
 
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 100)
@@ -33,7 +35,13 @@ export function OrderConfirmation() {
   }, [])
 
   useEffect(() => {
-    const fetchOrder = async () => {
+    const hydrate = async () => {
+      try {
+        if (provider === "paypal" && paypalToken) {
+          // capture the PayPal order then continue
+          await fetch(`/api/checkout/paypal/capture?token=${encodeURIComponent(paypalToken)}`)
+        }
+      } catch {}
       if (!orderId) {
         setLoading(false)
         return
@@ -63,8 +71,8 @@ export function OrderConfirmation() {
         setLoading(false)
       }
     }
-    fetchOrder()
-  }, [orderId])
+    hydrate()
+  }, [orderId, provider, paypalToken])
 
   const estimatedDelivery = useMemo(
     () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString(),

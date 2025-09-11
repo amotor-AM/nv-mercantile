@@ -6,7 +6,6 @@ import { Search, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CartIcon } from "@/components/cart-icon"
-import { getAllProducts } from "@/lib/product-data"
 import { useRouter } from "next/navigation"
 import { useSession, signIn, signOut } from "next-auth/react"
 
@@ -18,9 +17,7 @@ export function Header() {
   const router = useRouter()
   const { data: session } = useSession()
 
-  const allProducts = getAllProducts()
-
-  const handleSearch = (query: string) => {
+  const handleSearch = async (query: string) => {
     setSearchQuery(query)
     
     if (query.trim() === "") {
@@ -29,15 +26,16 @@ export function Header() {
       return
     }
 
-    const results = allProducts.filter(product => 
-      product.name.toLowerCase().includes(query.toLowerCase()) ||
-      product.subtitle.toLowerCase().includes(query.toLowerCase()) ||
-      product.material.toLowerCase().includes(query.toLowerCase()) ||
-      product.applications.some(app => app.toLowerCase().includes(query.toLowerCase()))
-    ).slice(0, 5) // Limit to 5 results
-
-    setSearchResults(results)
-    setShowSearchResults(true)
+    try {
+      const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&pageSize=5`)
+      if (res.ok) {
+        const data = await res.json()
+        setSearchResults(data.items ?? [])
+        setShowSearchResults(true)
+      }
+    } catch {
+      // ignore
+    }
   }
 
   const handleProductClick = (productId: string) => {
@@ -49,10 +47,9 @@ export function Header() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
-      // Navigate to search results page or show results
       setShowSearchResults(false)
-      // For now, just clear the search
       setSearchQuery("")
+      router.push(`/machined-parts?q=${encodeURIComponent(searchQuery)}`)
     }
   }
 
