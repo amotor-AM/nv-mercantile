@@ -1,13 +1,23 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
+import { auth } from "./auth"
+import { NextResponse } from "next/server"
 
-const isAdminRoute = createRouteMatcher(["/admin(.*)"])
+export default auth((req) => {
+  const { nextUrl } = req
+  const isAdmin = nextUrl.pathname.startsWith("/admin")
 
-export default clerkMiddleware(async (auth, req) => {
-  if (isAdminRoute(req)) {
-    await auth.protect()
+  if (isAdmin) {
+    if (!req.auth) {
+      const url = new URL("/api/auth/signin", nextUrl.origin)
+      url.searchParams.set("callbackUrl", nextUrl.href)
+      return NextResponse.redirect(url)
+    }
+    const role = (req.auth as any).user?.role
+    if (role !== "ADMIN") {
+      return NextResponse.redirect(new URL("/", nextUrl.origin))
+    }
   }
 })
 
 export const config = {
-  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+  matcher: ["/admin/:path*"],
 }

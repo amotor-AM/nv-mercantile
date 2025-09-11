@@ -32,6 +32,17 @@ export async function POST(req: NextRequest) {
       }
       break
     }
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session
+      const orderId = (session.metadata as any)?.orderId || session.client_reference_id || ""
+      if (orderId) {
+        await prisma.order.update({
+          where: { id: orderId },
+          data: { status: "PAID", paymentIntentId: String(session.payment_intent ?? "") },
+        })
+      }
+      break
+    }
     case "charge.refunded": {
       const charge = event.data.object as Stripe.Charge
       const orderId = (charge.metadata as any)?.orderId

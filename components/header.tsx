@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { CartIcon } from "@/components/cart-icon"
 import { getAllProducts } from "@/lib/product-data"
 import { useRouter } from "next/navigation"
+import { useSession, signIn, signOut } from "next-auth/react"
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -15,6 +16,7 @@ export function Header() {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [showSearchResults, setShowSearchResults] = useState(false)
   const router = useRouter()
+  const { data: session } = useSession()
 
   const allProducts = getAllProducts()
 
@@ -88,6 +90,11 @@ export function Header() {
             <Link href="/custom-orders" className="font-medium hover:text-primary">
               Custom Orders
             </Link>
+            {session?.user?.role === "ADMIN" && (
+              <Link href="/admin" className="font-medium hover:text-primary">
+                Admin
+              </Link>
+            )}
           </nav>
 
           {/* Right side */}
@@ -136,6 +143,22 @@ export function Header() {
             {/* Icons */}
             <CartIcon />
 
+            {/* Auth */}
+            {session?.user ? (
+              <div className="hidden md:flex items-center gap-2">
+                <Link href="/account/orders" className="font-medium hover:text-primary">Account</Link>
+                <Button variant="outline" size="sm" onClick={() => signOut()}>
+                  Sign out
+                </Button>
+              </div>
+            ) : (
+              <div className="hidden md:flex">
+                <Button variant="outline" size="sm" onClick={() => signIn()}>
+                  Sign in
+                </Button>
+              </div>
+            )}
+
             {/* Mobile menu button */}
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
               {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -167,6 +190,23 @@ export function Header() {
                   onChange={(e) => handleSearch(e.target.value)}
                   className="border-0 bg-transparent p-0 focus-visible:ring-0 text-sm" 
                 />
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                {session?.user ? (
+                  <>
+                    <Link href="/account/orders" className="font-medium hover:text-primary">Account</Link>
+                    {session.user.role === "ADMIN" && (
+                      <Link href="/admin" className="font-medium hover:text-primary">Admin</Link>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => signOut()}>
+                      Sign out
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => signIn()}>
+                    Sign in
+                  </Button>
+                )}
               </div>
             </nav>
           </div>

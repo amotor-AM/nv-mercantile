@@ -341,16 +341,18 @@ export function CheckoutFlow() {
                       } catch {}
 
                       if (formData.paymentMethod === "stripe") {
-                        const s = await fetch("/api/checkout/stripe", {
+                        const s = await fetch("/api/checkout/stripe-session", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ orderId: order.id }),
                         })
                         if (s.ok) {
-                          // Proceed to confirmation; capture via webhooks
-                          clearCart()
-                          router.push("/order-confirmation")
-                          return
+                          const data = await s.json()
+                          if (data.url) {
+                            clearCart()
+                            window.location.href = data.url
+                            return
+                          }
                         }
                       } else if (formData.paymentMethod === "paypal") {
                         const p = await fetch("/api/checkout/paypal", {
@@ -361,6 +363,7 @@ export function CheckoutFlow() {
                         if (p.ok) {
                           const data = await p.json()
                           if (data.approveUrl) {
+                            clearCart()
                             window.location.href = data.approveUrl
                             return
                           }

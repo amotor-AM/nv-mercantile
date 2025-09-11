@@ -1,14 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { auth } from "@/auth"
 
 export async function GET(req: NextRequest) {
+  const session = await auth()
+  const isAdmin = (session as any)?.user?.role === "ADMIN"
+
   const { searchParams } = new URL(req.url)
-  const email = searchParams.get("email") ?? undefined
-  const userId = searchParams.get("userId") ?? undefined
+  const emailParam = searchParams.get("email") ?? undefined
+  const userIdParam = searchParams.get("userId") ?? undefined
 
   const where: any = {}
-  if (userId) where.userId = userId
-  if (email) where.email = email
+
+  if (isAdmin) {
+    if (userIdParam) where.userId = userIdParam
+    if (emailParam) where.email = emailParam
+  } else {
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    // Non-admin can only view their own orders
+    where.OR = [
+      { userId: session.user.id },
+      ...(session.user.email ? [{ email: session.user.email }] : []),
+    ]
+  }
 
   const orders = await prisma.order.findMany({
     where,
@@ -19,6 +35,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth()
   const data = await req.json().catch(() => null)
   if (!data) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
 
@@ -55,7 +72,7 @@ export async function POST(req: NextRequest) {
     data: {
       orderNumber: "NV-" + Date.now().toString(36).toUpperCase(),
       email,
-      userId,
+      userId: session?.user?.id ?? userId,
       status: "PENDING",
       total,
       currency: "usd",

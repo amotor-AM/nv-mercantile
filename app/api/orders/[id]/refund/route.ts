@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import Stripe from "stripe"
+import { auth } from "@/auth"
 
 export async function POST(_: Request, { params }: { params: { id: string } }) {
+  const session = await auth()
+  const isAdmin = (session as any)?.user?.role === "ADMIN"
+  if (!isAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   const order = await prisma.order.findUnique({ where: { id: params.id } })
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
