@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test"
 
-test("checkout flow creates order and shows confirmation", async ({ page }) => {
+test("checkout flow (PayPal mocked) creates order and shows confirmation", async ({ page }) => {
   // Seed cart in localStorage before any scripts run
   await page.addInitScript(() => {
     const state = {
@@ -21,12 +21,12 @@ test("checkout flow creates order and shows confirmation", async ({ page }) => {
     localStorage.setItem("nv-mercantile-cart-storage", JSON.stringify({ state, version: 0 }))
   })
 
-  // Intercept Stripe checkout session to keep test in-app
-  await page.route("**/api/checkout/stripe-session", async (route) => {
+  // Intercept PayPal approve URL to keep test in-app
+  await page.route("**/api/checkout/paypal", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ url: "/order-confirmation" }),
+      body: JSON.stringify({ approveUrl: "/order-confirmation" }),
     })
   })
 
@@ -40,11 +40,8 @@ test("checkout flow creates order and shows confirmation", async ({ page }) => {
   await page.getByLabel("Shipping Address").fill("123 Test St, Test City, TX")
   await page.getByRole("button", { name: "Continue to Payment" }).click()
 
-  // Fill payment info (dummy data; Stripe Checkout will be mocked)
-  await page.getByLabel("Card Number").fill("4242 4242 4242 4242")
-  await page.getByLabel("Expiry Date").fill("12/30")
-  await page.getByLabel("CVV").fill("123")
-  await page.getByLabel("Name on Card").fill("Jane Doe")
+  // Choose PayPal and continue
+  await page.getByRole("button", { name: "PayPal" }).click()
   await page.getByRole("button", { name: "Continue to Review" }).click()
 
   // Place order

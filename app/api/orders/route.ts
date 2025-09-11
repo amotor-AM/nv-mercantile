@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     return {
       productId: p.id,
       name: p.name,
-      price: Math.round((i.price ?? p.price) * 100),
+      price: Math.round(p.price * 100), // never trust client price
       quantity: i.quantity,
     }
   })
