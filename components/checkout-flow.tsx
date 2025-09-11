@@ -1,16 +1,18 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useCartStore } from "@/lib/cart-store"
 import { getProductById } from "@/lib/product-data"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
 import { ShoppingBag, Info } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Elements, PaymentElement, useElements, useStripe, PaymentRequestButtonElement } from "@stripe/react-stripe-js"
+import { stripePromise } from "@/lib/stripe-client"
+import { track } from "@vercel/analytics"
 
 interface CheckoutFormData {
   email: string
@@ -19,21 +21,156 @@ interface CheckoutFormData {
   address: string
   phoneNumber: string
   paymentMethod: string
-  cardNumber: string
-  expiryDate: string
-  cvv: string
-  nameOnCard: string
-  billingAddress: string
-  billingEmail: string
-  billingFirstName: string
-  billingLastName: string
-  billingAddressLine: string
-  billingPhoneNumber: string
   saveInfo: boolean
 }
 
+function StripePaymentSection({ clientSecret }: { clientSecret: string | null }) {
+  if (!clientSecret) {
+    return <div className="text-sm text-muted-foreground">Initializing secure payment...</div>
+  }
+  return (
+    <div className="border rounded-lg p-4">
+      <PaymentElement />
+    </div>
+  )
+}
+
+function PaymentRequestExpress({
+  clientSecret,
+  orderId,
+  amount,
+  onSuccess,
+}: {
+  clientSecret: string
+  orderId: string
+  amount: number // cents
+  onSuccess: () => void
+}) {
+  const stripe = useStripe()
+  const [paymentRequest, setPaymentRequest] = useState<any>(null)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    async function init() {
+      if (!stripe || !clientSecret) return
+      const pr = stripe.paymentRequest({
+        country: "US",
+        currency: "usd",
+        total: { label: "NV Mercantile", amount },
+        requestPayerEmail: true,
+        requestPayerName: true,
+      })
+      const result = await pr.canMakePayment()
+      if (result && mounted) {
+        pr.on("paymentmethod", async (ev: any) => {
+          try {
+            // confirm payment using provided method
+            const { error } = await stripe.confirmCardPayment(clientSecret, {
+              payment_method: ev.paymentMethod.id,
+            }, { handleActions: true })
+            if (error) {
+              ev.complete("fail")
+              return
+            }
+            ev.complete("success")
+            onSuccess()
+          } catch (e) {
+            ev.complete("fail")
+          }
+        })
+        setPaymentRequest(pr)
+        setReady(true)
+      }
+    }
+    init()
+    return () => {
+      mounted = false
+    }
+  }, [stripe, clientSecret, amount, onSuccess])
+
+  if (!ready || !paymentRequest) return null
+
+  return (
+    <div className="border rounded-lg p-4">
+      <div className="mb-3 text-sm text-muted-foreground">Or pay instantly</div>
+      <PaymentRequestButtonElement options={{ paymentRequest }} />
+    </div>
+  )
+}
+
+function StripeReviewAndPlaceOrder(props: {
+  orderId: string | null
+  email: string
+  firstName: string
+  lastName: string
+  address: string
+  phoneNumber: string
+  isProcessing: boolean
+  onProcessing: (v: boolean) => void
+  onSuccess: () => void
+}) {
+  const { orderId, isProcessing, onProcessing, onSuccess } = props
+  const stripe = useStripe()
+  const elements = useElements()
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-medium">Review Your Order</h2>
+
+      <div className="space-y-4">
+        <div className="border rounded-lg p-4">
+          <h3 className="font-medium mb-2">Payment</h3>
+          <p className="text-sm text-muted-foreground">Your card will be securely charged via Stripe.</p>
+        </div>
+
+        {errorMessage && (
+          <div className="text-sm text-destructive">
+            {errorMessage}
+          </div>
+        )}
+
+        <Button
+          onClick={async () => {
+            onProcessing(true)
+            setErrorMessage(null)
+            try {
+              if (!orderId) throw new Error("Order not initialized")
+              if (!stripe || !elements) throw new Error("Payment not ready")
+
+              const return_url = `${process.env.NEXT_PUBLIC_BASE_URL}/order-confirmation?order=${orderId}`
+
+              const result = await stripe.confirmPayment({
+                elements,
+                confirmParams: { return_url },
+                redirect: "if_required",
+              })
+
+              if (result.error) {
+                setErrorMessage(result.error.message || "Payment failed. Please try again.")
+                onProcessing(false)
+                return
+              }
+
+              onSuccess()
+            } catch (e: any) {
+              setErrorMessage(e.message || "Payment failed. Please try again.")
+              onProcessing(false)
+            }
+          }}
+          disabled={isProcessing || !stripe || !elements}
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300"
+        >
+          {isProcessing ? "Processing..." : "Place Order"}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function CheckoutFlow() {
-  const { items, getTotalItems, getTotalPrice, clearCart } = useCartStore()
+  const { items, getTotalPrice, clearCart } = useCartStore()
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -43,34 +180,25 @@ export function CheckoutFlow() {
     lastName: "",
     address: "",
     phoneNumber: "",
-    paymentMethod: "card",
-    cardNumber: "",
-    expiryDate: "",
-    cvv: "",
-    nameOnCard: "",
-    billingAddress: "same",
-    billingEmail: "",
-    billingFirstName: "",
-    billingLastName: "",
-    billingAddressLine: "",
-    billingPhoneNumber: "",
+    paymentMethod: "stripe",
     saveInfo: false,
   })
 
+  const [orderId, setOrderId] = useState<string | null>(null)
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
   const subtotal = getTotalPrice()
   const shipping = 8.0
   const tax = 0.0
   const total = subtotal + shipping + tax
 
-  const handlePlaceOrder = () => {
-    // Placeholder for order placement logic
-    setIsProcessing(true)
-    setTimeout(() => {
-      setIsProcessing(false)
-      clearCart()
-      router.push("/order-confirmation")
-    }, 2000)
-  }
+  // Analytics: begin checkout
+  useEffect(() => {
+    if (currentStep === 1) {
+      try {
+        track("begin_checkout", { value: total, currency: "USD", items: items.map(i => ({ id: i.id, qty: i.quantity, price: i.price })) })
+      } catch {}
+    }
+  }, [currentStep, total, items])
 
   if (items.length === 0) {
     return (
@@ -93,8 +221,66 @@ export function CheckoutFlow() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleStepComplete = (step: number) => {
+  const createOrderAndPaymentIntent = async () => {
+    // Create the order
+    const orderRes = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: formData.email,
+        items: items.map((i) => ({
+          productId: i.id,
+          name: i.name,
+          price: i.price,
+          quantity: i.quantity,
+        })),
+        shipping: {
+          name: `${formData.firstName} ${formData.lastName}`,
+          phone: formData.phoneNumber,
+          address: formData.address,
+        },
+      }),
+    })
+    if (!orderRes.ok) throw new Error("Failed to create order")
+    const order = await orderRes.json()
+    setOrderId(order.id)
+    track("create_order", { orderId: order.id, value: order.total / 100, currency: order.currency })
+
+    // Create or update a PaymentIntent for Stripe
+    const piRes = await fetch("/api/checkout/stripe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: order.id }),
+    })
+    if (!piRes.ok) throw new Error("Failed to initialize payment")
+    const { clientSecret } = await piRes.json()
+    setClientSecret(clientSecret)
+
+    try {
+      window.localStorage.setItem("nv-mercantile-email", formData.email)
+    } catch {}
+  }
+
+  const handleStepComplete = async (step: number) => {
+    if (step === 1) {
+      setIsProcessing(true)
+      try {
+        await createOrderAndPaymentIntent()
+        track("add_shipping_info", { orderId, email: formData.email })
+        setCurrentStep(2)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setIsProcessing(false)
+      }
+      return
+    }
     if (step < 3) {
+      if (formData.paymentMethod === "stripe") {
+        track("add_payment_info", { method: "stripe", orderId })
+      } else {
+        track("add_payment_info", { method: "paypal", orderId })
+      }
       setCurrentStep(step + 1)
     }
   }
@@ -190,128 +376,225 @@ export function CheckoutFlow() {
               <Button
                 onClick={() => handleStepComplete(1)}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                disabled={!formData.firstName || !formData.lastName || !formData.email || !formData.address}
+                disabled={isProcessing || !formData.firstName || !formData.lastName || !formData.email || !formData.address}
               >
-                Continue to Payment
+                {isProcessing ? "Preparing Payment..." : "Continue to Payment"}
               </Button>
             </div>
           )}
 
-          {/* Step 2: Payment Information */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-medium">Payment Information</h2>
-              
-              <div>
-                <Label htmlFor="cardNumber">Card Number</Label>
-                <Input
-                  id="cardNumber"
-                  value={formData.cardNumber}
-                  onChange={(e) => handleInputChange("cardNumber", e.target.value)}
-                  placeholder="1234 5678 9012 3456"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="expiryDate">Expiry Date</Label>
-                  <Input
-                    id="expiryDate"
-                    value={formData.expiryDate}
-                    onChange={(e) => handleInputChange("expiryDate", e.target.value)}
-                    placeholder="MM/YY"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cvv">CVV</Label>
-                  <Input
-                    id="cvv"
-                    value={formData.cvv}
-                    onChange={(e) => handleInputChange("cvv", e.target.value)}
-                    placeholder="123"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="nameOnCard">Name on Card</Label>
-                  <Input
-                    id="nameOnCard"
-                    value={formData.nameOnCard}
-                    onChange={(e) => handleInputChange("nameOnCard", e.target.value)}
-                    placeholder="Full Name"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentStep(1)}
-                  className="flex-1"
+          {/* Steps 2 and 3 (Stripe or PayPal) */}
+          {(currentStep === 2 || currentStep === 3) && (
+            <>
+              {formData.paymentMethod === "stripe" && clientSecret ? (
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret,
+                    appearance: {
+                      theme: "flat",
+                      variables: {
+                        colorPrimary: "hsl(0 0% 9%)",
+                        colorBackground: "hsl(0 0% 100%)",
+                        colorText: "hsl(0 0% 9%)",
+                        borderRadius: "8px",
+                        fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto",
+                      },
+                    },
+                  }}
                 >
-                  Back
-                </Button>
-                <Button
-                  onClick={() => handleStepComplete(2)}
-                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-                  disabled={!formData.cardNumber || !formData.expiryDate || !formData.cvv || !formData.nameOnCard}
-                >
-                  Continue to Review
-                </Button>
-              </div>
-            </div>
-          )}
+                  {currentStep === 2 && (
+                    <div className="space-y-6">
+                      <h2 className="text-2xl font-medium">Payment Information</h2>
 
-          {/* Step 3: Review and Place Order */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-medium">Review Your Order</h2>
-              
-              <div className="space-y-4">
-                <div className="border rounded-lg p-4">
-                  <h3 className="font-medium mb-2">Shipping Address</h3>
-                  <p className="text-sm text-gray-600">
-                    {formData.firstName} {formData.lastName}
-                  </p>
-                  <p className="text-sm text-gray-600">{formData.address}</p>
-                  <p className="text-sm text-gray-600">{formData.email}</p>
-                  <p className="text-sm text-gray-600">{formData.phoneNumber}</p>
-                  <button className="text-sm text-blue-600 underline mt-2">
-                    Edit
-                  </button>
-                </div>
-
-                <div className="border rounded-lg p-4">
-                  <h3 className="font-medium mb-2">Payment Method</h3>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
-                        <span className="text-sm font-medium">💳</span>
+                      <div className="space-y-3">
+                        <Label>Payment Method</Label>
+                        <div className="flex gap-3">
+                          <button
+                            className={`px-3 py-2 rounded border ${formData.paymentMethod === "stripe" ? "border-primary" : "border-gray-200"}`}
+                            onClick={() => handleInputChange("paymentMethod", "stripe")}
+                            type="button"
+                          >
+                            Stripe (Card)
+                          </button>
+                          <button
+                            className={`px-3 py-2 rounded border ${formData.paymentMethod === "paypal" ? "border-primary" : "border-gray-200"}`}
+                            onClick={() => handleInputChange("paymentMethod", "paypal")}
+                            type="button"
+                          >
+                            PayPal
+                          </button>
+                        </div>
                       </div>
-                      <span>Credit Card</span>
+
+                      {orderId && clientSecret ? (
+                        <PaymentRequestExpress
+                          clientSecret={clientSecret}
+                          orderId={orderId}
+                          amount={Math.round(total * 100)}
+                          onSuccess={() => {
+                            clearCart()
+                            router.push(`/order-confirmation?order=${orderId}`)
+                          }}
+                        />
+                      ) : null}
+
+                      <div className="border rounded-lg p-4">
+                        <PaymentElement />
+                      </div>
+
+                      <div className="flex gap-4">
+                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1">
+                          Back
+                        </Button>
+                        <Button
+                          onClick={() => handleStepComplete(2)}
+                          className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                        >
+                          Continue to Review
+                        </Button>
+                      </div>
                     </div>
-                    <button className="text-sm text-blue-600 underline">
-                      Edit
-                    </button>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    <p className="font-medium text-black">Card ending in {formData.cardNumber.slice(-4)}</p>
-                    <p>{formData.nameOnCard}</p>
-                  </div>
-                </div>
+                  )}
 
-                <p className="text-sm text-gray-600">
-                  By placing your order, you agree to NV Mercantile's Privacy Policy and Terms of Use.
-                </p>
+                  {currentStep === 3 && (
+                    <StripeReviewAndPlaceOrder
+                      email={formData.email}
+                      firstName={formData.firstName}
+                      lastName={formData.lastName}
+                      address={formData.address}
+                      phoneNumber={formData.phoneNumber}
+                      orderId={orderId}
+                      isProcessing={isProcessing}
+                      onProcessing={setIsProcessing}
+                      onSuccess={() => {
+                        clearCart()
+                        router.push(`/order-confirmation?order=${orderId}`)
+                      }}
+                    />
+                  )}
+                </Elements>
+              ) : (
+                // PayPal or Stripe not yet initialized
+                <>
+                  {currentStep === 2 && (
+                    <div className="space-y-6">
+                      <h2 className="text-2xl font-medium">Payment Information</h2>
 
-                <Button
-                  onClick={handlePlaceOrder}
-                  disabled={isProcessing}
-                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300"
-                >
-                  {isProcessing ? "Processing..." : "Place Order"}
-                </Button>
-              </div>
-            </div>
+                      <div className="space-y-3">
+                        <Label>Payment Method</Label>
+                        <div className="flex gap-3">
+                          <button
+                            className={`px-3 py-2 rounded border ${formData.paymentMethod === "stripe" ? "border-primary" : "border-gray-200"}`}
+                            onClick={() => handleInputChange("paymentMethod", "stripe")}
+                            type="button"
+                          >
+                            Stripe (Card)
+                          </button>
+                          <button
+                            className={`px-3 py-2 rounded border ${formData.paymentMethod === "paypal" ? "border-primary" : "border-gray-200"}`}
+                            onClick={() => handleInputChange("paymentMethod", "paypal")}
+                            type="button"
+                          >
+                            PayPal
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-muted-foreground">
+                        You will be securely redirected to PayPal to complete your purchase.
+                      </div>
+
+                      <div className="flex gap-4">
+                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1">
+                          Back
+                        </Button>
+                        <Button
+                          onClick={() => handleStepComplete(2)}
+                          className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                        >
+                          Continue to Review
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentStep === 3 && (
+                    <div className="space-y-6">
+                      <h2 className="text-2xl font-medium">Review Your Order</h2>
+
+                      <div className="space-y-4">
+                        <div className="border rounded-lg p-4">
+                          <h3 className="font-medium mb-2">Shipping Address</h3>
+                          <p className="text-sm text-gray-600">
+                            {formData.firstName} {formData.lastName}
+                          </p>
+                          <p className="text-sm text-gray-600">{formData.address}</p>
+                          <p className="text-sm text-gray-600">{formData.email}</p>
+                          <p className="text-sm text-gray-600">{formData.phoneNumber}</p>
+                          <button className="text-sm text-blue-600 underline mt-2" onClick={() => setCurrentStep(1)}>
+                            Edit
+                          </button>
+                        </div>
+
+                        <div className="border rounded-lg p-4">
+                          <h3 className="font-medium mb-2">Payment Method</h3>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+                                <span className="text-sm font-medium">💳</span>
+                              </div>
+                              <span className="capitalize">{formData.paymentMethod}</span>
+                            </div>
+                            <button className="text-sm text-blue-600 underline" onClick={() => setCurrentStep(2)}>
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="text-sm text-gray-600">
+                          By placing your order, you agree to NV Mercantile's Privacy Policy and Terms of Use.
+                        </p>
+
+                        <Button
+                          onClick={async () => {
+                            setIsProcessing(true)
+                            try {
+                              if (!orderId) throw new Error("Order not initialized")
+                              // PayPal redirect
+                              const p = await fetch("/api/checkout/paypal", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ orderId }),
+                              })
+                              if (p.ok) {
+                                const data = await p.json()
+                                if (data.approveUrl) {
+                                  clearCart()
+                                  window.location.href = data.approveUrl
+                                  return
+                                }
+                              }
+                              // Fallback
+                              clearCart()
+                              router.push(`/order-confirmation?order=${orderId}`)
+                            } catch (e) {
+                              console.error(e)
+                            } finally {
+                              setIsProcessing(false)
+                            }
+                          }}
+                          disabled={isProcessing}
+                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300"
+                        >
+                          {isProcessing ? "Processing..." : "Place Order"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           )}
         </div>
 

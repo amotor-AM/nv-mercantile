@@ -9,12 +9,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Force static export - NOT SSR
-  output: 'export',
-  trailingSlash: true,
-  skipTrailingSlashRedirect: true,
-  distDir: 'out',
-  // Disable server features to ensure static export
 }
 
 export default nextConfig

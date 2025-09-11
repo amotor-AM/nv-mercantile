@@ -6,8 +6,8 @@ import { Search, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CartIcon } from "@/components/cart-icon"
-import { getAllProducts } from "@/lib/product-data"
 import { useRouter } from "next/navigation"
+import { useSession, signIn, signOut } from "next-auth/react"
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -15,10 +15,9 @@ export function Header() {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [showSearchResults, setShowSearchResults] = useState(false)
   const router = useRouter()
+  const { data: session } = useSession()
 
-  const allProducts = getAllProducts()
-
-  const handleSearch = (query: string) => {
+  const handleSearch = async (query: string) => {
     setSearchQuery(query)
     
     if (query.trim() === "") {
@@ -27,15 +26,16 @@ export function Header() {
       return
     }
 
-    const results = allProducts.filter(product => 
-      product.name.toLowerCase().includes(query.toLowerCase()) ||
-      product.subtitle.toLowerCase().includes(query.toLowerCase()) ||
-      product.material.toLowerCase().includes(query.toLowerCase()) ||
-      product.applications.some(app => app.toLowerCase().includes(query.toLowerCase()))
-    ).slice(0, 5) // Limit to 5 results
-
-    setSearchResults(results)
-    setShowSearchResults(true)
+    try {
+      const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&pageSize=5`)
+      if (res.ok) {
+        const data = await res.json()
+        setSearchResults(data.items ?? [])
+        setShowSearchResults(true)
+      }
+    } catch {
+      // ignore
+    }
   }
 
   const handleProductClick = (productId: string) => {
@@ -47,10 +47,9 @@ export function Header() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
-      // Navigate to search results page or show results
       setShowSearchResults(false)
-      // For now, just clear the search
       setSearchQuery("")
+      router.push(`/machined-parts?q=${encodeURIComponent(searchQuery)}`)
     }
   }
 
@@ -88,6 +87,11 @@ export function Header() {
             <Link href="/custom-orders" className="font-medium hover:text-primary">
               Custom Orders
             </Link>
+            {session?.user?.role === "ADMIN" && (
+              <Link href="/admin" className="font-medium hover:text-primary">
+                Admin
+              </Link>
+            )}
           </nav>
 
           {/* Right side */}
@@ -136,6 +140,22 @@ export function Header() {
             {/* Icons */}
             <CartIcon />
 
+            {/* Auth */}
+            {session?.user ? (
+              <div className="hidden md:flex items-center gap-2">
+                <Link href="/account/orders" className="font-medium hover:text-primary">Account</Link>
+                <Button variant="outline" size="sm" onClick={() => signOut()}>
+                  Sign out
+                </Button>
+              </div>
+            ) : (
+              <div className="hidden md:flex">
+                <Button variant="outline" size="sm" onClick={() => signIn()}>
+                  Sign in
+                </Button>
+              </div>
+            )}
+
             {/* Mobile menu button */}
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
               {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -167,6 +187,23 @@ export function Header() {
                   onChange={(e) => handleSearch(e.target.value)}
                   className="border-0 bg-transparent p-0 focus-visible:ring-0 text-sm" 
                 />
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                {session?.user ? (
+                  <>
+                    <Link href="/account/orders" className="font-medium hover:text-primary">Account</Link>
+                    {session.user.role === "ADMIN" && (
+                      <Link href="/admin" className="font-medium hover:text-primary">Admin</Link>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => signOut()}>
+                      Sign out
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => signIn()}>
+                    Sign in
+                  </Button>
+                )}
               </div>
             </nav>
           </div>

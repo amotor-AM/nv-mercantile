@@ -7,6 +7,7 @@ import { Heart, ChevronLeft, ChevronRight, Clock, ExternalLink, ChevronDown, Sta
 import { ProductImageGallery } from "@/components/product-image-gallery"
 import { useCartStore } from "@/lib/cart-store"
 import { getProduct } from "@/lib/product-data"
+import { track } from "@vercel/analytics"
 
 interface ProductDetailsProps {
   productId: string
@@ -39,6 +40,9 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
       dimensions: product.dimensions,
     })
 
+    try {
+      track("add_to_cart", { id: productId, name: product.name, value: product.price, currency: "USD", qty: 1 })
+    } catch {}
     openCart()
   }
 
