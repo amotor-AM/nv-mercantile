@@ -49,8 +49,33 @@ model Product {
   category       String
   orderItems     OrderItem[]
   movements      InventoryMovement[]
+  variants       Variant[]
+  images         ProductImage[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+model Variant {
+  id         String   @id @default(cuid())
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+  sku        String   @unique
+  price      Float
+  attributes Json     // free-form e.g., {"size":"M","color":"Black"}
+  stockLevel Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  orderItems OrderItem[]
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  url       String
+  alt       String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
 }
 
 model Order {
@@ -66,6 +91,8 @@ model Order {
   paymentIntentId String?
   refundStatus    RefundStatus @default(NONE)
   items           OrderItem[]
+  refunds         Refund[]
+  rmas            ReturnRequest[]
   shippingName    String?
   shippingPhone   String?
   shippingAddress String?
@@ -83,10 +110,13 @@ model OrderItem {
   orderId   String
   product   Product  @relation(fields: [productId], references: [id])
   productId String
+  variant   Variant? @relation(fields: [variantId], references: [id])
+  variantId String?
   name      String
   price     Int      // in cents
   quantity  Int
   createdAt DateTime @default(now())
+  returnItems ReturnItem[]
 }
 
 model InventoryMovement {
@@ -97,6 +127,40 @@ model InventoryMovement {
   quantity  Int            // positive for restock/adjustment, negative for sale
   note      String?
   createdAt DateTime       @default(now())
+}
+
+model Refund {
+  id         String   @id @default(cuid())
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String
+  amount     Int      // cents
+  reason     String?
+  provider   String?  // stripe/paypal
+  providerRefundId String?
+  status     RefundStatus @default(PARTIAL)
+  createdAt  DateTime @default(now())
+  processedAt DateTime?
+}
+
+model ReturnRequest {
+  id         String      @id @default(cuid())
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String
+  status     RmaStatus   @default(REQUESTED)
+  reason     String?
+  items      ReturnItem[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model ReturnItem {
+  id           String        @id @default(cuid())
+  rma          ReturnRequest @relation(fields: [rmaId], references: [id], onDelete: Cascade)
+  rmaId        String
+  orderItem    OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  orderItemId  String
+  requestedQty Int
+  receivedQty  Int           @default(0)
 }
 
 model SupportTicket {
@@ -195,4 +259,13 @@ enum TicketStatus {
 enum MessageAuthor {
   CUSTOMER
   AGENT
+}
+
+enum RmaStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  IN_TRANSIT
+  RECEIVED
+  REFUNDED
 }

@@ -4,7 +4,8 @@ import { auth } from "@/auth"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
-  const isAdmin = (session as any)?.user?.role === "ADMIN"
+  const role = (session as any)?.user?.role
+  const isPrivileged = ["ADMIN","MANAGER","SUPPORT"].includes(role)
 
   const { searchParams } = new URL(req.url)
   const emailParam = searchParams.get("email") ?? undefined
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const where: any = {}
 
-  if (isAdmin) {
+  if (isPrivileged) {
     if (userIdParam) where.userId = userIdParam
     if (emailParam) where.email = emailParam
   } else {
@@ -29,7 +30,10 @@ export async function GET(req: NextRequest) {
   const orders = await prisma.order.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    include: { items: true },
+    include: {
+      items: true,
+      ...(isPrivileged ? { rmas: { include: { items: { include: { orderItem: true } } } } } : {}),
+    } as any,
   })
   return NextResponse.json(orders)
 }

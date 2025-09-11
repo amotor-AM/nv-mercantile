@@ -81,6 +81,12 @@ export default function ProductsAdmin() {
                 <TableCell>{p.category}</TableCell>
                 <TableCell>
                   <div className="flex gap-2">
+                    <a href={`/admin/products/${p.id}/images`}>
+                      <Button variant="outline" size="sm">Images</Button>
+                    </a>
+                    <a href={`/admin/products/${p.id}/variants`}>
+                      <Button variant="outline" size="sm">Variants</Button>
+                    </a>
                     <Button variant="outline" size="sm" onClick={() => remove(p.id)}>Delete</Button>
                   </div>
                 </TableCell>

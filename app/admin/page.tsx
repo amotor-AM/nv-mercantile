@@ -43,15 +43,15 @@ export default function AdminDashboard() {
     setUpdating(null)
   }
 
-  const exportCsv = (type: "orders" | "products") => {
-    window.location.href = `/api/admin/export/${type}.csv`
+  const exportCsv = (type: "orders" | "products" | "shipping") => {
+    window.location.href = type === "shipping" ? "/api/admin/shipping/export.csv" : `/api/admin/export/${type}.csv`
   }
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-4">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Manage orders, refunds, fulfillment, inventory, and products</p>
+        <p className="text-sm text-muted-foreground">Manage orders, refunds, fulfillment, inventory, products, returns, support, and analytics</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <Input placeholder="Search orders or emails..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-sm" />
@@ -71,8 +71,12 @@ export default function AdminDashboard() {
         </Select>
         <Button variant="outline" onClick={() => exportCsv("orders")}>Export Orders CSV</Button>
         <Button variant="outline" onClick={() => exportCsv("products")}>Export Products CSV</Button>
+        <Button variant="outline" onClick={() => exportCsv("shipping")}>Export Shipping CSV</Button>
         <Link href="/admin/inventory"><Button variant="outline">Inventory</Button></Link>
         <Link href="/admin/products"><Button variant="outline">Products</Button></Link>
+        <Link href="/admin/returns"><Button variant="outline">Returns</Button></Link>
+        <Link href="/admin/support"><Button variant="outline">Support</Button></Link>
+        <Link href="/admin/analytics"><Button variant="outline">Analytics</Button></Link>
       </div>
       <Separator className="my-2" />
 
@@ -96,8 +100,9 @@ export default function AdminDashboard() {
                 <TableRow key={o.id}>
                   <TableCell>
                     <div className="font-medium">{o.orderNumber}</div>
-                    <div>
+                    <div className="flex gap-2">
                       <a className="text-xs underline" href={`/api/orders/${o.id}/invoice.pdf`} target="_blank" rel="noopener noreferrer">Invoice PDF</a>
+                      <a className="text-xs underline" href={`/api/orders/${o.id}/packing-slip.pdf`} target="_blank" rel="noopener noreferrer">Packing Slip</a>
                     </div>
                   </TableCell>
                   <TableCell>
