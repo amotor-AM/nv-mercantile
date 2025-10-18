@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
 import { sendOrderShippedEmail } from "@/lib/email"
+import { OrderUpdateSchema } from "@/lib/validation"
+import { getClientIp, logAdminAction } from "@/lib/security"
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -26,18 +28,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const isPrivileged = ["ADMIN", "MANAGER"].includes(role)
   if (!isPrivileged) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const body = await req.json().catch(() => ({}))
-  const status = body.status as string | undefined
-  const data: any = {}
-  if (status) data.status = status
-  if (body.trackingCarrier !== undefined) data.trackingCarrier = body.trackingCarrier
-  if (body.trackingNumber !== undefined) data.trackingNumber = body.trackingNumber
-  if (body.trackingUrl !== undefined) data.trackingUrl = body.trackingUrl
-  if (body.shippedAt !== undefined) data.shippedAt = new Date(body.shippedAt)
+  const json = await req.json().catch(() => ({}))
+  const parsed = OrderUpdateSchema.safeParse(json)
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 422 })
 
-  if (!Object.keys(data).length) return NextResponse.json({ error: "no changes" }, { status: 400 })
+  const data: any = { ...parsed.data }
+  if (data.shippedAt !== undefined) data.shippedAt = new Date(data.shippedAt)
 
   const order = await prisma.order.update({ where: { id: params.id }, data })
+
+  await logAdminAction({
+    userId: session?.user?.id ?? null,
+    action: "order.update",
+    targetType: "Order",
+    targetId: params.id,
+    payload: parsed.data,
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
+  })
 
   if (data.status === "FULFILLED") {
     try {

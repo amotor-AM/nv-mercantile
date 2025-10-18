@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
 import Stripe from "stripe"
 import { sendRefundEmail } from "@/lib/email"
+import { RefundCreateSchema } from "@/lib/validation"
+import { getClientIp, logAdminAction } from "@/lib/security"
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -23,10 +25,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!["ADMIN","MANAGER","SUPPORT"].includes(role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  const body = await req.json().catch(() => ({}))
-  const amount = Number(body.amount)
-  const reason = body.reason as string | undefined
-  if (!amount || amount <= 0) return NextResponse.json({ error: "amount (cents) required" }, { status: 400 })
+  const json = await req.json().catch(() => ({}))
+  const parsed = RefundCreateSchema.safeParse(json)
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 422 })
+  const { amount, reason } = parsed.data
 
   const order = await prisma.order.findUnique({ where: { id: params.id } })
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -60,6 +62,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   await prisma.order.update({
     where: { id: order.id },
     data: { refundStatus: totalRefunded >= order.total ? "FULL" : "PARTIAL", status: totalRefunded >= order.total ? "REFUNDED" : order.status },
+  })
+
+  await logAdminAction({
+    userId: session?.user?.id ?? null,
+    action: "refund.create",
+    targetType: "Order",
+    targetId: order.id,
+    payload: { amount, reason, providerRefundId },
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
   })
 
   try { await sendRefundEmail(order.id) } catch {}

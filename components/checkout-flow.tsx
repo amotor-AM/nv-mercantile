@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation"
 import { Elements, PaymentElement, useElements, useStripe, PaymentRequestButtonElement } from "@stripe/react-stripe-js"
 import { stripePromise } from "@/lib/stripe-client"
 import { track } from "@vercel/analytics"
+import { csrfHeader } from "@/lib/csrf"
 
 interface CheckoutFormData {
   email: string
@@ -225,7 +226,7 @@ export function CheckoutFlow() {
     // Create the order
     const orderRes = await fetch("/api/orders", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({
         email: formData.email,
         items: items.map((i) => ({
@@ -249,7 +250,7 @@ export function CheckoutFlow() {
     // Create or update a PaymentIntent for Stripe
     const piRes = await fetch("/api/checkout/stripe", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ orderId: order.id }),
     })
     if (!piRes.ok) throw new Error("Failed to initialize payment")
@@ -564,7 +565,7 @@ export function CheckoutFlow() {
                               // PayPal redirect
                               const p = await fetch("/api/checkout/paypal", {
                                 method: "POST",
-                                headers: { "Content-Type": "application/json" },
+                                headers: { "Content-Type": "application/json", ...csrfHeader() },
                                 body: JSON.stringify({ orderId }),
                               })
                               if (p.ok) {

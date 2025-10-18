@@ -1,54 +1,32 @@
-# CRITICAL: Cloudflare Pages Configuration Instructions
+# Cloudflare Pages SSR Configuration Instructions
 
-## The Problem
-Cloudflare Pages is incorrectly detecting this as a Cloudflare Workers project and running `wrangler deploy` instead of treating it as a Next.js static site.
+This app requires SSR to support API routes, NextAuth, Prisma, and Stripe webhooks. Use `@cloudflare/next-on-pages` for Cloudflare Pages deployments.
 
-## The Solution
-You MUST manually configure the build settings in the Cloudflare Pages dashboard.
+## 1) Go to Cloudflare Pages Dashboard
+- https://dash.cloudflare.com/
+- Workers & Pages → Pages
+- Select your `nv-mercantile` project (or create it)
 
-## Step-by-Step Fix
+## 2) Settings → Builds & deployments
+Configure:
 
-### 1. Go to Cloudflare Pages Dashboard
-- Navigate to https://dash.cloudflare.com/
-- Go to "Workers & Pages" → "Pages"
-- Find your `nv-mercantile` project
+- Framework preset: None
+- Build command: `yarn cf:build`
+- Build output directory: `.vercel/output/static` (auto)
+- Root directory: (leave empty)
 
-### 2. Go to Settings → Builds & Deployments
-- Click on your project
-- Go to "Settings" tab
-- Click "Builds & deployments"
+## 3) Environment Variables
+Add:
+- `NEXTAUTH_URL`
+- `NEXTAUTH_SECRET`
+- `DATABASE_PROVIDER` and `DATABASE_URL` (managed Postgres/MySQL)
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- Optional: Upstash Redis (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`), Resend email (`RESEND_API_KEY`, `RESEND_FROM`)
 
-### 3. Configure Build Settings (CRITICAL)
-**Framework preset**: Select `Next.js (Static HTML Export)` from dropdown
-**Build command**: `yarn build`
-**Build output directory**: `out`
-**Root directory**: (leave empty)
-**Node.js version**: `22.16.0`
+## 4) Redeploy
+Trigger a new deployment. Pages Functions will serve SSR, including `/api/webhooks/stripe`.
 
-### 4. Environment Variables (Optional)
-Add these if needed:
-- `NODE_VERSION`: `22.16.0`
+## 5) Logs
+View build and runtime logs under Deployments → Logs.
 
-### 5. Save and Redeploy
-- Click "Save"
-- Go back to "Deployments" tab
-- Click "Retry deployment" on the latest failed build
-
-## Why This Fixes It
-- By selecting "Next.js (Static HTML Export)" framework preset, Cloudflare Pages will know this is a static site
-- It will run `yarn build` instead of `wrangler deploy`
-- It will look for static files in the `out/` directory
-- It will NOT try to deploy as a Cloudflare Worker
-
-## Expected Result
-After configuring these settings, the build should:
-1. ✅ Run `yarn build` (not `wrangler deploy`)
-2. ✅ Generate static files in `out/` directory
-3. ✅ Deploy successfully as a static site
-
-## If It Still Fails
-Check that:
-- Framework preset is set to "Next.js (Static HTML Export)"
-- Build output directory is set to `out`
-- No wrangler.toml file exists in the repository
-- The build command is `yarn build`
+If you previously configured static export, switch to the SSR flow above. Do not use `wrangler deploy` or static presets for this project.

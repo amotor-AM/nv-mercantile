@@ -1,145 +1,71 @@
-# Cloudflare Pages Deployment Guide
+# Cloudflare Pages SSR Deployment Guide (Next.js + next-on-pages)
 
-This guide explains how to deploy the NV Mercantile application to Cloudflare Pages.
+This guide explains how to deploy the NV Mercantile application to Cloudflare Pages using Server-Side Rendering (SSR) powered by `@cloudflare/next-on-pages`. This enables API routes, authentication, and Stripe webhooks to work properly on Cloudflare.
 
 ## Prerequisites
 
 - GitHub repository connected to Cloudflare Pages
-- Node.js version 22.16.0 (specified in `.nvmrc`)
+- Node.js version 18.x or 20.x (Cloudflare recommends 18; `.nvmrc` uses 22 which is fine locally)
+- A managed database (Postgres or MySQL) for production (Prisma does not support SQLite on Cloudflare)
 
-## Configuration
+## Build Settings (in Cloudflare Pages dashboard)
 
-The project is configured for Cloudflare Pages deployment with the following settings:
+- Project name: nv-mercantile
+- Production branch: main
+- Framework preset: None (we will specify a custom build command)
+- Build command: `yarn cf:build`
+- Build output directory: `.vercel/output/static` (auto-detected)
+- Root directory: leave empty
 
-### Build Settings (Auto-detected by Cloudflare Pages)
-- **Framework**: Next.js (auto-detected)
-- **Build command**: `yarn build` (auto-detected)
-- **Build output directory**: `out` (configured in next.config.mjs)
-- **Root directory**: `/` (leave empty)
-- **Node.js version**: 22.16.0 (specified in `.nvmrc`)
+## Environment Variables (Pages → Settings → Environment variables)
 
-### Environment Variables
-No environment variables are required for basic deployment, but you may want to add:
+Required:
+- `NEXTAUTH_URL` → https://your-domain.com
+- `NEXTAUTH_SECRET` → a strong random secret (32+ chars)
+- `DATABASE_PROVIDER` → `postgresql` or `mysql`
+- `DATABASE_URL` → connection string to your managed DB
+- `STRIPE_SECRET_KEY` → from Stripe dashboard
+- `STRIPE_WEBHOOK_SECRET` → for `/api/webhooks/stripe`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` → from Stripe dashboard
 
-- `NODE_VERSION`: `22.16.0` (matches `.nvmrc`)
+Optional:
+- `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (for rate limiting)
+- `RESEND_API_KEY` and `RESEND_FROM` (email)
+- `ALLOW_BACKORDER` (defaults to false)
 
-## Package Manager
+## Package.json changes
 
-The project uses **Yarn** as the package manager, specified in `package.json`:
+A new script is provided for Cloudflare builds:
 
-```json
-{
-  "packageManager": "yarn@1.22.22"
-}
-```
+- `cf:build`: runs the `@cloudflare/next-on-pages` build, producing the `.vercel/output` bundle compatible with Pages Functions.
 
-## Deployment Steps
+Use this as your Cloudflare Pages build command: `yarn cf:build`.
 
-1. **Connect Repository**
-   - Go to Cloudflare Pages dashboard
-   - Click "Create a project"
-   - Connect your GitHub repository (`amotor-AM/nv-mercantile`)
+## Notes on SSR vs Static
 
-2. **Configure Build Settings**
-   - **Project name**: `nv-mercantile` (or your preferred name)
-   - **Production branch**: `main`
-   - **Framework preset**: `Next.js (Static HTML Export)`
-   - **Build command**: `yarn build`
-   - **Build output directory**: `out`
-   - **Root directory**: Leave empty
+- We removed static export references. This app uses API routes, NextAuth, Stripe integration, and Prisma, so SSR is required.
+- The Stripe webhook is served at `/api/webhooks/stripe`, and Cloudflare Pages Functions will route it correctly.
 
-3. **Environment Variables** (Optional)
-   - Add `NODE_VERSION`: `22.16.0`
+## Logs and Observability
 
-4. **Deploy**
-   - Click "Save and Deploy"
-   - Cloudflare will automatically build and deploy your application
+- Function logs are available per deployment under Pages → Deployments → Logs.
+- Stripe webhook delivery logs can be viewed in your Stripe dashboard to verify calls reach your endpoint.
+
+## After Deployment
+
+- Test authentication flows (sign in/out).
+- Verify `/api/products` returns data (rate-limited).
+- Create an order and confirm Stripe PaymentIntent can be created.
+- Confirm Stripe webhook hits `/api/webhooks/stripe` and order transitions to PAID.
 
 ## Troubleshooting
 
-### Common Issues
-
-**"Cannot install with frozen-lockfile" Error**
-- ✅ **Fixed**: Removed outdated `pnpm-lock.yaml`
-- ✅ **Fixed**: Added `"packageManager": "yarn@1.22.22"` to `package.json`
-- ✅ **Fixed**: Regenerated `yarn.lock`
-
-**Build Failures**
-- Ensure Node.js version is 22.16.0
-- Check that all dependencies are properly installed
-- Verify that the build command is `yarn build`
-
-**"Cannot install with frozen-lockfile" Error**
-- ✅ **Fixed**: Removed outdated `pnpm-lock.yaml`
-- ✅ **Fixed**: Added `"packageManager": "yarn@1.22.22"` to `package.json`
-- ✅ **Fixed**: Regenerated `yarn.lock`
-
-**"Missing entry-point to Worker script" Error**
-- ✅ **Fixed**: Removed `wrangler.toml` entirely to allow auto-detection
-- ✅ **Fixed**: Cloudflare Pages now auto-detects Next.js project
-- ✅ **Fixed**: Added `_headers` and `_redirects` files for Pages detection
-- ✅ **Fixed**: Configured Next.js for static export with `output: 'export'`
-- ✅ **Fixed**: Added `generateStaticParams()` to dynamic routes
-
-**Next.js 15 "params should be awaited" Error**
-- ✅ **Fixed**: Made page components async and awaited `params` object
-- ✅ **Fixed**: Updated TypeScript interfaces to reflect Promise-based params
-
-**Static Asset Issues**
-- The `next.config.mjs` has `images: { unoptimized: true }` for Cloudflare compatibility
-- Static assets in `/public` are automatically served
-
-## Build Configuration Details
-
-### next.config.mjs
-```javascript
-const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true, // Prevents build failures on ESLint errors
-  },
-  typescript: {
-    ignoreBuildErrors: true, // Prevents build failures on TypeScript errors
-  },
-  images: {
-    unoptimized: true, // Required for static deployment platforms
-  },
-  // Cloudflare Pages configuration
-  trailingSlash: true,
-  output: 'export', // Static export for Cloudflare Pages
-  distDir: 'out', // Output directory for static files
-}
-```
-
-### Package.json Scripts
-- `build`: `next build` - Builds the application for production
-- `start`: `next start` - Starts the production server
-- `dev`: `next dev` - Starts the development server
-
-## Custom Domain (Optional)
-
-To use a custom domain:
-1. Go to your Cloudflare Pages project
-2. Click on "Custom domains"
-3. Add your domain and follow the DNS setup instructions
-
-## Monitoring Deployment
-
-After deployment:
-- Check the Cloudflare Pages dashboard for build status
-- Monitor function logs if you encounter runtime errors
-- Use the preview deployments for testing changes before merging to main
-
-## Performance Optimization
-
-The application is already optimized for Cloudflare Pages:
-- Static generation for better performance
-- Image optimization disabled (compatible with static deployment)
-- Minimal runtime dependencies
+- If Prisma fails on Cloudflare, ensure you are using a managed DB (not SQLite).
+- If requests hit CSRF errors from the browser, confirm the `nv_csrf` cookie exists and is being sent via `x-csrf-token` header (the app does this automatically).
+- If Stripe webhook errors with raw body parsing, verify `STRIPE_WEBHOOK_SECRET` and that the route is reachable publicly.
 
 ## Support
 
-If you encounter deployment issues:
-1. Check the build logs in Cloudflare Pages dashboard
-2. Verify all dependencies are installed correctly
-3. Ensure the Node.js version matches `.nvmrc`
-4. Check that the package manager is correctly detected as Yarn
+- Check Pages build logs and function logs.
+- Verify environment variables and secrets in Cloudflare.
+- Ensure the build command uses `yarn cf:build`.

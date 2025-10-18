@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { csrfHeader } from "@/lib/csrf"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -29,7 +30,7 @@ export default function ReturnsPage() {
   const update = async (orderId: string, rmaId: string, status: string) => {
     await fetch(`/api/orders/${orderId}/rma/${rmaId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ status }),
     })
     window.location.reload()
@@ -39,7 +40,7 @@ export default function ReturnsPage() {
     const received = rma.items.map((it: any) => ({ returnItemId: it.id, qty: it.requestedQty }))
     await fetch(`/api/orders/${orderId}/rma/${rma.id}/receive`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ received }),
     })
     window.location.reload()

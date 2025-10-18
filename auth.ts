@@ -13,6 +13,7 @@ export const {
   signOut,
 } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || "",
   session: {
     strategy: "database",
   },
@@ -20,12 +21,12 @@ export const {
     GitHub({
       clientId: process.env.GITHUB_ID || "",
       clientSecret: process.env.GITHUB_SECRET || "",
-      allowDangerousEmailAccountLinking: true,
+      // Do not allow dangerous account linking across OAuth providers
     }),
     Google({
       clientId: process.env.GOOGLE_ID || "",
       clientSecret: process.env.GOOGLE_SECRET || "",
-      allowDangerousEmailAccountLinking: true,
+      // Do not allow dangerous account linking across OAuth providers
     }),
     Email({
       async sendVerificationRequest(params) {

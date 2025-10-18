@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { limit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 export async function GET(req: NextRequest) {
+  // Basic public rate limit by IP to mitigate scraping/DoS on product listings
+  const ip = getClientIp(req)
+  const ok = await limit(`products:${ip}`)
+  if (!ok) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+  }
+
   const { searchParams } = new URL(req.url)
   const page = Number(searchParams.get("page") ?? "1")
   const pageSize = Math.min(Number(searchParams.get("pageSize") ?? "20"), 100)

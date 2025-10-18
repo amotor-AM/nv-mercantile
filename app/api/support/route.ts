@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
+import { SupportCreateSchema } from "@/lib/validation"
+import { limit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 export async function GET() {
   const session = await auth()
@@ -20,22 +23,30 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await auth()
-  const body = await req.json().catch(() => ({}))
-  const email = body.email ?? session?.user?.email
-  if (!body.subject || !body.body || !email) {
-    return NextResponse.json({ error: "subject, body, email required" }, { status: 400 })
+
+  // Basic public rate limit to mitigate spam
+  const ip = getClientIp(req)
+  const ok = await limit(`support:${ip}`)
+  if (!ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+
+  const json = await req.json().catch(() => ({}))
+  const parsed = SupportCreateSchema.safeParse(json)
+  const email = parsed.success ? parsed.data.email ?? session?.user?.email : session?.user?.email
+  if (!parsed.success || !email) {
+    return NextResponse.json({ error: "Invalid input" }, { status: 422 })
   }
+
   const ticket = await prisma.supportTicket.create({
     data: {
       email,
-      subject: body.subject,
+      subject: parsed.data.subject,
       userId: session?.user?.id ?? null,
       status: "OPEN",
       messages: {
         create: [
           {
             author: "CUSTOMER",
-            body: body.body,
+            body: parsed.data.body,
           },
         ],
       },

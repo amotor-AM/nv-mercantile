@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
 import Stripe from "stripe"
 import { sendRefundEmail } from "@/lib/email"
+import { RmaReceiveSchema } from "@/lib/validation"
+import { getClientIp, logAdminAction } from "@/lib/security"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string; rmaId: string } }) {
   const session = await auth()
@@ -10,9 +12,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
   if (!["ADMIN","MANAGER","SUPPORT","WAREHOUSE"].includes(role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  const body = await req.json().catch(() => ({}))
-  const received = body.received as { returnItemId: string; qty: number }[]
-  if (!received?.length) return NextResponse.json({ error: "received required" }, { status: 400 })
+  const json = await req.json().catch(() => ({}))
+  const parsed = RmaReceiveSchema.safeParse(json)
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 422 })
+  const received = parsed.data.received
 
   const rma = await prisma.returnRequest.findUnique({
     where: { id: params.rmaId },
@@ -74,6 +77,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     }
     try { await sendRefundEmail(rma.orderId) } catch {}
   }
+
+  await logAdminAction({
+    userId: session?.user?.id ?? null,
+    action: "rma.receive",
+    targetType: "ReturnRequest",
+    targetId: rma.id,
+    payload: { received, refundCents },
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
+  })
 
   return NextResponse.json({ ok: true, refundCents })
 }

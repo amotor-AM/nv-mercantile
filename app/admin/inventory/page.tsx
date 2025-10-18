@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+import { csrfHeader } from "@/lib/csrf"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -102,7 +103,7 @@ function AdjustDialog({ product, onDone }: { product: any; onDone: () => void })
   const submit = async () => {
     await fetch(`/api/inventory/${product.id}/adjust`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ quantity: Number(quantity), type, note }),
     })
     setOpen(false)

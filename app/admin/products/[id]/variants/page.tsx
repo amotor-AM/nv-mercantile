@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { csrfHeader } from "@/lib/csrf"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -23,7 +24,7 @@ export default function ProductVariantsPage() {
     try { attrs = attributes ? JSON.parse(attributes) : {} } catch {}
     await fetch(`/api/admin/products/${productId}/variants`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ sku, price: Number(price), attributes: attrs }),
     })
     setSku("")
@@ -33,7 +34,7 @@ export default function ProductVariantsPage() {
   }
 
   const remove = async (id: string) => {
-    await fetch(`/api/admin/variants/${id}`, { method: "DELETE" })
+    await fetch(`/api/admin/variants/${id}`, { method: "DELETE", headers: { ...csrfHeader() } })
     mutate()
   }
 

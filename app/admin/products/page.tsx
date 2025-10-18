@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
+import { csrfHeader } from "@/lib/csrf"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -18,7 +19,7 @@ export default function ProductsAdmin() {
   const create = async () => {
     await fetch("/api/admin/products", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ ...form, price: Number(form.price) }),
     })
     setForm({ slug: "", name: "", price: 0 })
@@ -26,7 +27,7 @@ export default function ProductsAdmin() {
   }
 
   const remove = async (id: string) => {
-    await fetch(`/api/admin/products/${id}`, { method: "DELETE" })
+    await fetch(`/api/admin/products/${id}`, { method: "DELETE", headers: { ...csrfHeader() } })
     mutate()
   }
 
@@ -35,7 +36,7 @@ export default function ProductsAdmin() {
     if (!file) return
     const fd = new FormData()
     fd.set("file", file)
-    await fetch("/api/admin/import/products", { method: "POST", body: fd })
+    await fetch("/api/admin/import/products", { method: "POST", body: fd, headers: { ...csrfHeader() } })
     if (fileRef.current) fileRef.current.value = ""
     mutate()
   }

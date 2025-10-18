@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
+import { InventoryAdjustSchema } from "@/lib/validation"
+import { getClientIp, logAdminAction } from "@/lib/security"
 
 export async function POST(req: NextRequest, { params }: { params: { productId: string } }) {
   const session = await auth()
@@ -9,15 +11,12 @@ export async function POST(req: NextRequest, { params }: { params: { productId: 
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { quantity, type, note } = (await req.json().catch(() => ({}))) as {
-    quantity?: number
-    type?: "RESTOCK" | "ADJUSTMENT"
-    note?: string
+  const json = await req.json().catch(() => ({}))
+  const parsed = InventoryAdjustSchema.safeParse(json)
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid input" }, { status: 422 })
   }
-
-  if (!quantity || !type) {
-    return NextResponse.json({ error: "quantity and type required" }, { status: 400 })
-  }
+  const { quantity, type, note } = parsed.data
 
   const product = await prisma.product.findUnique({ where: { id: params.productId } })
   if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -44,6 +43,16 @@ export async function POST(req: NextRequest, { params }: { params: { productId: 
       quantity: delta,
       note,
     },
+  })
+
+  await logAdminAction({
+    userId: session?.user?.id ?? null,
+    action: "inventory.adjust",
+    targetType: "Product",
+    targetId: product.id,
+    payload: { quantity, type, note },
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
   })
 
   return NextResponse.json({ ok: true, product: updated })

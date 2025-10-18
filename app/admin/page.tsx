@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
+import { csrfHeader } from "@/lib/csrf"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -36,7 +37,7 @@ export default function AdminDashboard() {
     setUpdating(id)
     await fetch(`/api/orders/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ status, ...extra }),
     })
     await mutate()
@@ -164,7 +165,7 @@ export default function AdminDashboard() {
                         variant="outline"
                         size="sm"
                         disabled={updating === o.id}
-                        onClick={() => fetch(`/api/orders/${o.id}/refund`, { method: "POST" }).then(() => mutate())}
+                        onClick={() => fetch(`/api/orders/${o.id}/refund`, { method: "POST", headers: { ...csrfHeader() } }).then(() => mutate())}
                       >
                         Refund
                       </Button>

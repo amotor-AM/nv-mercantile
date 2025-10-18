@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
+import { OrderCreateSchema } from "@/lib/validation"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -40,19 +41,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await auth()
-  const data = await req.json().catch(() => null)
-  if (!data) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  const json = await req.json().catch(() => null)
+  if (!json) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
 
-  const { email, userId, items, shipping } = data as {
-    email: string
-    userId?: string
-    items: { productId: string; name: string; price: number; quantity: number }[]
-    shipping?: { name?: string; phone?: string; address?: string }
+  const parsed = OrderCreateSchema.safeParse(json)
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid input" }, { status: 422 })
   }
-
-  if (!email || !items?.length) {
-    return NextResponse.json({ error: "Missing email or items" }, { status: 400 })
-  }
+  const { email, userId, items, shipping } = parsed.data
 
   const products = await prisma.product.findMany({
     where: { id: { in: items.map((i) => i.productId) } },

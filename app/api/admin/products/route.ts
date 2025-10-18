@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
+import { ProductCreateSchema } from "@/lib/validation"
+import { getClientIp, logAdminAction } from "@/lib/security"
 
 export async function GET() {
   const session = await auth()
@@ -21,18 +23,45 @@ export async function POST(req: NextRequest) {
   if (!["ADMIN", "MANAGER"].includes(role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  const body = await req.json().catch(() => ({}))
-  const { slug, name, subtitle, price, material, category, leadTime } = body
-  if (!slug || !name || typeof price !== "number") {
-    return NextResponse.json({ error: "slug, name, price required" }, { status: 400 })
+  const json = await req.json().catch(() => ({}))
+  const parsed = ProductCreateSchema.safeParse(json)
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid input" }, { status: 422 })
   }
+
+  const body = parsed.data
   const created = await prisma.product.create({
     data: {
-      slug, name, subtitle: subtitle ?? "", price, material: material ?? "", category: category ?? "", leadTime: leadTime ?? "2-3 weeks",
-      description: body.description ?? "", image: body.image ?? "", dimensions: body.dimensions ?? "", weight: body.weight ?? "",
-      specifications: body.specifications ?? {}, applications: body.applications ?? [],
-      inStock: true, stockLevel: body.stockLevel ?? 0, safetyStock: body.safetyStock ?? 0, reorderPoint: body.reorderPoint ?? 0, leadTimeDays: body.leadTimeDays ?? 7,
+      slug: body.slug,
+      name: body.name,
+      subtitle: body.subtitle ?? "",
+      price: body.price,
+      material: body.material ?? "",
+      category: body.category ?? "",
+      leadTime: body.leadTime ?? "2-3 weeks",
+      description: body.description ?? "",
+      image: body.image ?? "",
+      dimensions: body.dimensions ?? "",
+      weight: body.weight ?? "",
+      specifications: body.specifications ?? {},
+      applications: body.applications ?? [],
+      inStock: true,
+      stockLevel: body.stockLevel ?? 0,
+      safetyStock: body.safetyStock ?? 0,
+      reorderPoint: body.reorderPoint ?? 0,
+      leadTimeDays: body.leadTimeDays ?? 7,
     },
   })
+
+  await logAdminAction({
+    userId: session?.user?.id ?? null,
+    action: "product.create",
+    targetType: "Product",
+    targetId: created.id,
+    payload: body,
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
+  })
+
   return NextResponse.json(created, { status: 201 })
 }

@@ -9,12 +9,13 @@
   },
   "scripts": {
     "build": "next build",
+    "cf:build": "npx @cloudflare/next-on-pages@latest",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
+    "prisma:seed": "ts-node --compiler-options '{\\\"module\\\":\\\"CommonJS\\\"}' prisma/seed.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -84,7 +85,9 @@
     "@react-email/render": "^0.0.17",
     "pdfkit": "^0.15.0",
     "csv-parse": "^5.5.6",
-    "@sentry/nextjs": "^8.34.0"
+    "@sentry/nextjs": "^8.34.0",
+    "@upstash/redis": "^1.31.3",
+    "@upstash/ratelimit": "^1.1.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",
