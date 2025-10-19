@@ -251,15 +251,23 @@ export function CheckoutFlow() {
     setOrderId(order.id)
     track("create_order", { orderId: order.id, value: order.total / 100, currency: order.currency })
 
-    // Create or update a PaymentIntent for Stripe
-    const piRes = await fetch("/api/checkout/stripe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...csrfHeader() },
-      body: JSON.stringify({ orderId: order.id }),
-    })
-    if (!piRes.ok) throw new Error("Failed to initialize payment")
-    const { clientSecret } = await piRes.json()
-    setClientSecret(clientSecret)
+    // Create or update a PaymentIntent for Stripe (optional)
+    try {
+      const piRes = await fetch("/api/checkout/stripe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        body: JSON.stringify({ orderId: order.id }),
+      })
+      if (piRes.ok) {
+        const { clientSecret } = await piRes.json()
+        setClientSecret(clientSecret)
+      } else {
+        // Stripe not configured or failed; proceed with PayPal or manual confirmation
+        setClientSecret(null)
+      }
+    } catch {
+      setClientSecret(null)
+    }
 
     try {
       window.localStorage.setItem("nv-mercantile-email", formData.email)

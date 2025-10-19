@@ -50,10 +50,20 @@ export async function POST(req: NextRequest) {
   }
   const { email, userId, items, shipping } = parsed.data
 
+  const ids = items.map((i) => i.productId)
   const products = await prisma.product.findMany({
-    where: { id: { in: items.map((i) => i.productId) } },
+    where: {
+      OR: [
+        { id: { in: ids } },
+        { slug: { in: ids } },
+      ],
+    },
   })
-  const productMap = new Map(products.map((p) => [p.id, p]))
+  const productMap = new Map<string, (typeof products)[number]>()
+  for (const p of products) {
+    productMap.set(p.id, p)
+    productMap.set(p.slug, p)
+  }
 
   const allowBackorder = (process.env.ALLOW_BACKORDER || "false").toLowerCase() === "true"
   if (!allowBackorder) {
