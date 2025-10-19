@@ -17,9 +17,14 @@ export async function POST(req: NextRequest) {
   if (!expectedChallenge) return NextResponse.json({ error: "Missing challenge" }, { status: 400 })
 
   const creds = await prisma.webAuthnCredential.findMany({ where: { userId: session.user.id } })
-  const credential = creds.find((c) => c.credentialId === body?.id)
-  const selected = credential || creds[0]
-  if (!selected) return NextResponse.json({ error: "No credentials" }, { status: 400 })
+  // Match credential strictly by id or rawId (both are base64url in browser)
+  const bodyId = String(body?.id || "")
+  const bodyRawId = String(body?.rawId || "")
+  const selected =
+    creds.find((c) => c.credentialId === bodyId) ||
+    creds.find((c) => c.credentialId === bodyRawId)
+
+  if (!selected) return NextResponse.json({ error: "Credential not recognized" }, { status: 404 })
 
   let verified
   try {

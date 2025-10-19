@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         userAgent: req.headers.get("user-agent"),
       })
     } catch {}
-    return NextResponse.json
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
   // Generic fields

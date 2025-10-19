@@ -13,10 +13,20 @@ async function run() {
     take: 20,
   })
 
-  // Failed webhooks: use Redis metrics counters (last hour)
+  // Failed webhooks: use Redis metrics counters (last hour); fallback to DB audit logs
   const series = await getSeries(["webhook_error_stripe", "webhook_error_carrier"], 1)
-  const webhookErrorsLastHour =
+  let webhookErrorsLastHour =
     (series.webhook_error_stripe?.[0]?.value || 0) + (series.webhook_error_carrier?.[0]?.value || 0)
+
+  if (!webhookErrorsLastHour) {
+    const since1h = new Date(now.getTime() - 60 * 60 * 1000)
+    webhookErrorsLastHour = await prisma.auditLog.count({
+      where: {
+        createdAt: { gte: since1h },
+        action: "webhook.error",
+      },
+    })
+  }
 
   // High refund rates: refunds created last 24h / orders last 24h
   const ordersLast24 = await prisma.order.count({ where: { createdAt: { gte: since24h } } })

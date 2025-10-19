@@ -33,6 +33,10 @@ export async function POST(req: NextRequest) {
           automatic_payment_methods: { enabled: true },
         })
         clientSecret = updated.client_secret || undefined
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { status: "AWAITING_PAYMENT", paymentProvider: "stripe", total: amount },
+        })
       } else {
         // Create a new PI if previous is in a terminal state (rare)
         const created = await stripe.paymentIntents.create({
@@ -44,7 +48,7 @@ export async function POST(req: NextRequest) {
         clientSecret = created.client_secret || undefined
         await prisma.order.update({
           where: { id: order.id },
-          data: { paymentIntentId: created.id },
+          data: { status: "AWAITING_PAYMENT", paymentProvider: "stripe", paymentIntentId: created.id, total: amount },
         })
       }
     } else {
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
       clientSecret = pi.client_secret || undefined
       await prisma.order.update({
         where: { id: order.id },
-        data: { status: "AWAITING_PAYMENT", paymentProvider: "stripe", paymentIntentId: pi.id },
+        data: { status: "AWAITING_PAYMENT", paymentProvider: "stripe", paymentIntentId: pi.id, total: amount },
       })
     }
   } catch (e: any) {
