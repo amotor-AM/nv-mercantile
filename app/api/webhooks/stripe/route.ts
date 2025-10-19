@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { prisma } from "@/lib/db"
 import { sendOrderConfirmationEmail } from "@/lib/email"
+import { incCounter } from "@/lib/metrics"
 
 async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
   // Update order and decrement stock from items
@@ -38,6 +39,9 @@ async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
     })
   }
 
+  // Metrics: count successful payments
+  await incCounter("payment_success")
+
   // Send order confirmation email
   try {
     await sendOrderConfirmationEmail(orderId)
@@ -50,6 +54,7 @@ export async function POST(req: NextRequest) {
   const stripeSecret = process.env.STRIPE_SECRET_KEY || ""
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ""
   if (!stripeSecret || !webhookSecret) {
+    await incCounter("webhook_error_stripe")
     return NextResponse.json({ error: "Stripe webhook not configured" }, { status: 500 })
   }
 
@@ -61,8 +66,11 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(payload, sig, webhookSecret)
   } catch (err: any) {
+    await incCounter("webhook_error_stripe")
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
   }
+
+  await incCounter("webhook_ok_stripe")
 
   switch (event.type) {
     case "payment_intent.succeeded": {

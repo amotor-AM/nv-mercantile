@@ -1,40 +1,34 @@
+import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 
 export async function GET() {
   const session = await auth()
   const role = (session as any)?.user?.role
-  if (!["ADMIN","MANAGER","WAREHOUSE"].includes(role)) {
-    return new Response("Unauthorized", { status: 401 })
+  if (!["ADMIN", "MANAGER", "SUPPORT"].includes(role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  const orders = await prisma.order.findMany({
-    where: { status: { in: ["PAID", "FULFILLED"] } },
+
+  const shipments = await prisma.shipment.findMany({
     orderBy: { createdAt: "desc" },
+    include: { order: true },
     take: 2000,
   })
 
-  const header = ["orderNumber","name","address","email","phone","trackingNumber","carrier","total"]
-  const rows = [
-    header.join(","),
-    ...orders.map((o) =>
-      [o.orderNumber, csv(o.shippingName), csv(o.shippingAddress), csv(o.email), csv(o.shippingPhone), csv(o.trackingNumber), csv(o.trackingCarrier), (o.total/100).toFixed(2)].join(",")
-    ),
-  ]
-  const body = rows.join("\n")
-  return new Response(body, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": "attachment; filename=shipping_export.csv",
-    },
-  })
-}
-
-function csv(val: any) {
-  if (val === null || val === undefined) return ""
-  const s = String(val)
-  if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
-    return `"${s.replace(/"/g, '""')}"`
+  const lines = ["id,orderNumber,carrier,service,trackingNumber,status,createdAt,shippedAt,deliveredAt"]
+  for (const s of shipments) {
+    lines.push([
+      s.id,
+      s.order?.orderNumber || "",
+      s.carrier || "",
+      s.service || "",
+      s.trackingNumber || "",
+      s.status,
+      s.createdAt.toISOString(),
+      s.shippedAt ? s.shippedAt.toISOString() : "",
+      s.deliveredAt ? s.deliveredAt.toISOString() : "",
+    ].join(","))
   }
-  return s
+
+  return new NextResponse(lines.join("\n"), { headers: { "Content-Type": "text/csv" } })
 }

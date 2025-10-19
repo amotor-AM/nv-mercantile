@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { applyShipmentStatusUpdate, mapProviderStatusToShipmentStatus } from "@/lib/shipping"
+import { incCounter } from "@/lib/metrics"
 
 /**
  * Carrier webhook endpoint
@@ -16,7 +17,10 @@ import { applyShipmentStatusUpdate, mapProviderStatusToShipmentStatus } from "@/
  */
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
-  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  if (!body) {
+    await incCounter("webhook_error_carrier")
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  }
 
   // Generic fields
   let trackingNumber: string | undefined =
@@ -52,6 +56,7 @@ export async function POST(req: NextRequest) {
     new Date()
 
   if (!trackingNumber && !providerShipmentId) {
+    await incCounter("webhook_error_carrier")
     return NextResponse.json({ error: "Missing tracking identifier" }, { status: 400 })
   }
   const status = mapProviderStatusToShipmentStatus(statusRaw || "pre_transit")
@@ -65,6 +70,8 @@ export async function POST(req: NextRequest) {
     occurredAt,
     raw: body,
   })
+
+  await incCounter("webhook_ok_carrier")
 
   return NextResponse.json({ ok: true })
 }

@@ -197,3 +197,9 @@ export async function sendReorderReportEmail(
   const html = `<h3>Reorder Recommendations</h3><ul>${list}</ul>`
   await resend.emails.send({ from, to: [inventoryAlertTo], subject: "Reorder recommendations", html })
 }
+
+export async function sendAlertEmail(to: string, { subject, body }: { subject: string; body: string }) {
+  if (!resend) return
+  const html = `<pre>${body}</pre>`
+  await resend.emails.send({ from, to: [to], subject, html })
+}

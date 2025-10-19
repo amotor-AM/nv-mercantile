@@ -78,6 +78,7 @@ export default function AdminDashboard() {
         <Link href="/admin/returns"><Button variant="outline">Returns</Button></Link>
         <Link href="/admin/support"><Button variant="outline">Support</Button></Link>
         <Link href="/admin/analytics"><Button variant="outline">Analytics</Button></Link>
+        <Link href="/admin/ops"><Button variant="outline">Ops</Button></Link>
         <Link href="/admin/categories"><Button variant="outline">Categories</Button></Link>
         <Link href="/admin/navigation"><Button variant="outline">Navigation</Button></Link>
         <Link href="/admin/security"><Button variant="outline">Security</Button></Link>

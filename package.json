@@ -16,6 +16,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node --compiler-options '{\\\"module\\\":\\\"CommonJS\\\"}' prisma/seed.ts",
+    "prisma:seed:staging": "ts-node --compiler-options '{\\\"module\\\":\\\"CommonJS\\\"}' prisma/seed.staging.ts",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run --coverage",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -102,6 +105,7 @@
     "typescript": "^5",
     "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
-    "@playwright/test": "^1.47.2"
+    "@playwright/test": "^1.47.2",
+    "vitest": "^2.1.4"
   }
 }

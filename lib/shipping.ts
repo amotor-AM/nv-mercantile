@@ -1,5 +1,6 @@
 import { prisma } from "./db"
 import { sendOrderShippedEmail, sendShipmentDeliveredEmail, sendShipmentExceptionEmail, sendShipmentOutForDeliveryEmail } from "./email"
+import { incCounter } from "./metrics"
 
 /**
  * Shipping provider selection
@@ -235,6 +236,7 @@ export async function createShipmentAndMaybePurchaseLabel(params: CreateShipment
         raw: purchase.raw || null,
       },
     })
+    await incCounter("shipment_label_purchased")
   }
 
   // Send shipped email if we have a label and tracking
@@ -310,6 +312,11 @@ export async function applyShipmentStatusUpdate(args: {
       raw: args.raw || null,
     },
   })
+
+  // Metrics
+  if (status === "EXCEPTION") await incCounter("shipment_exception")
+  if (status === "DELIVERED") await incCounter("shipment_delivered")
+  if (status === "OUT_FOR_DELIVERY") await incCounter("shipment_out_for_delivery")
 
   // Recompute order derived status: fulfilled when all shipments delivered
   await recomputeOrderStatus(updated.orderId)
