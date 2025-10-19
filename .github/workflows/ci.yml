@@ -30,7 +30,7 @@ jobs:
       - name: Prisma generate and migrate
         run: |
           yarn prisma:generate
-          yarn prisma:migrate
+          npx prisma migrate deploy
           yarn prisma:seed
 
       - name: Typecheck

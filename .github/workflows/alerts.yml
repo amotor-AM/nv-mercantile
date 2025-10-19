@@ -31,7 +31,7 @@ jobs:
       - name: Prisma generate and migrate
         run: |
           yarn prisma:generate
-          yarn prisma:migrate
+          npx prisma migrate deploy
 
       - name: Run alert checks
         run: npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/check-alerts.ts

@@ -3,6 +3,7 @@ import Stripe from "stripe"
 import { prisma } from "@/lib/db"
 import { sendOrderConfirmationEmail } from "@/lib/email"
 import { incCounter } from "@/lib/metrics"
+import { getClientIp, logAdminAction } from "@/lib/security"
 
 async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
   // Update order and decrement stock from items
@@ -55,6 +56,16 @@ export async function POST(req: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ""
   if (!stripeSecret || !webhookSecret) {
     await incCounter("webhook_error_stripe")
+    try {
+      await logAdminAction({
+        action: "webhook.error",
+        targetType: "Stripe",
+        targetId: null,
+        payload: { reason: "not_configured" },
+        ip: getClientIp(req),
+        userAgent: req.headers.get("user-agent"),
+      })
+    } catch {}
     return NextResponse.json({ error: "Stripe webhook not configured" }, { status: 500 })
   }
 
@@ -67,6 +78,16 @@ export async function POST(req: NextRequest) {
     event = stripe.webhooks.constructEvent(payload, sig, webhookSecret)
   } catch (err: any) {
     await incCounter("webhook_error_stripe")
+    try {
+      await logAdminAction({
+        action: "webhook.error",
+        targetType: "Stripe",
+        targetId: null,
+        payload: { error: err?.message || String(err) },
+        ip: getClientIp(req),
+        userAgent: req.headers.get("user-agent"),
+      })
+    } catch {}
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
   }
 

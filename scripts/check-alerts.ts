@@ -1,9 +1,9 @@
 import { prisma } from "../lib/db"
 import { sendAlertEmail } from "../lib/email"
+import { getSeries } from "../lib/metrics"
 
 async function run() {
   const now = new Date()
-  const since1h = new Date(now.getTime() - 60 * 60 * 1000)
   const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
   // Low stock: products with inStock=false or stockLevel<=0
@@ -13,13 +13,10 @@ async function run() {
     take: 20,
   })
 
-  // Failed webhooks: infer from audit logs or metrics (if persisted)
-  const webhookErrorsLastHour = await prisma.auditLog.count({
-    where: {
-      action: { in: ["webhook.error", "stripe.webhook.error", "carrier.webhook.error"] },
-      createdAt: { gte: since1h },
-    },
-  })
+  // Failed webhooks: use Redis metrics counters (last hour)
+  const series = await getSeries(["webhook_error_stripe", "webhook_error_carrier"], 1)
+  const webhookErrorsLastHour =
+    (series.webhook_error_stripe?.[0]?.value || 0) + (series.webhook_error_carrier?.[0]?.value || 0)
 
   // High refund rates: refunds created last 24h / orders last 24h
   const ordersLast24 = await prisma.order.count({ where: { createdAt: { gte: since24h } } })

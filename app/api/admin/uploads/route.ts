@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { randomUUID } from "crypto"
 import { promises as fs } from "fs"
 import path from "path"
+import { getClientIp, logAdminAction } from "@/lib/security"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -26,5 +27,16 @@ export async function POST(req: NextRequest) {
   await fs.writeFile(filepath, bytes)
 
   const url = `/uploads/${filename}`
+
+  await logAdminAction({
+    userId: session?.user?.id ?? null,
+    action: "upload.create",
+    targetType: "Upload",
+    targetId: filename,
+    payload: { url, name: (file as any).name ?? null, size: (file as any).size ?? null },
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
+  })
+
   return NextResponse.json({ url })
 }
