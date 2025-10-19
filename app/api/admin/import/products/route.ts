@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { parse } from "csv-parse/sync"
+import { logAdminAction, getClientIp } from "@/lib/security"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -56,6 +57,18 @@ export async function POST(req: NextRequest) {
     })
     updated++
   }
+
+  try {
+    await logAdminAction({
+      userId: session?.user?.id ?? null,
+      action: "import.products",
+      targetType: "Product",
+      targetId: null,
+      payload: { count: updated, filename: (file as any).name ?? null },
+      ip: getClientIp(req),
+      userAgent: req.headers.get("user-agent"),
+    })
+  } catch {}
 
   return NextResponse.json({ ok: true, updated })
 }

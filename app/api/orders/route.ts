@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
 import { OrderCreateSchema } from "@/lib/validation"
+import { normalizeCountryCode } from "@/lib/utils"
 
 export async function GET(req: NextRequest) {
   const session = await auth()

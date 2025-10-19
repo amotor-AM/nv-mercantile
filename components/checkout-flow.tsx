@@ -15,6 +15,24 @@ import { stripePromise } from "@/lib/stripe-client"
 import { track } from "@vercel/analytics"
 import { csrfHeader } from "@/lib/csrf"
 import Image from "next/image"
+import { normalizeCountryCode } from "@/lib/utils"
+
+interface CheckoutFormData {
+  email: string
+  firstName: string
+  lastName: string
+  addressLine1: string
+  addressLine2: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+  lat?: number
+  lng?: number
+  phoneNumber: string
+  paymentMethod: string
+  saveInfo: boolean
+}
 
 function useGooglePlacesAutocomplete(setFormData: (updater: (prev: CheckoutFormData) => CheckoutFormData) => void) {
   useEffect(() => {
@@ -81,23 +99,6 @@ function useGooglePlacesAutocomplete(setFormData: (updater: (prev: CheckoutFormD
   }, [setFormData])
 }
 
-interface CheckoutFormData {
-  email: string
-  firstName: string
-  lastName: string
-  addressLine1: string
-  addressLine2: string
-  city: string
-  state: string
-  postalCode: string
-  country: string
-  lat?: number
-  lng?: number
-  phoneNumber: string
-  paymentMethod: string
-  saveInfo: boolean
-}
-
 function StripePaymentSection({ clientSecret }: { clientSecret: string | null }) {
   if (!clientSecret) {
     return <div className="text-sm text-muted-foreground">Initializing secure payment...</div>
@@ -139,10 +140,13 @@ function PaymentRequestExpress({
       if (result && mounted) {
         pr.on("paymentmethod", async (ev: any) => {
           try {
-            // confirm payment using provided method
-            const { error } = await stripe.confirmCardPayment(clientSecret, {
-              payment_method: ev.paymentMethod.id,
-            }, { handleActions: true })
+            const { error } = await stripe.confirmCardPayment(
+              clientSecret,
+              {
+                payment_method: ev.paymentMethod.id,
+              },
+              { handleActions: true }
+            )
             if (error) {
               ev.complete("fail")
               return
@@ -175,11 +179,6 @@ function PaymentRequestExpress({
 
 function StripeReviewAndPlaceOrder(props: {
   orderId: string | null
-  email: string
-  firstName: string
-  lastName: string
-  address: string
-  phoneNumber: string
   isProcessing: boolean
   onProcessing: (v: boolean) => void
   onSuccess: () => void
@@ -246,7 +245,6 @@ function StripeReviewAndPlaceOrder(props: {
 
 export function CheckoutFlow() {
   const { items, getTotalPrice, clearCart } = useCartStore()
-  useGooglePlacesAutocomplete((updater) => setFormData((prev) => updater(prev)))
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -254,11 +252,17 @@ export function CheckoutFlow() {
     email: "",
     firstName: "",
     lastName: "",
-    address: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "US",
     phoneNumber: "",
     paymentMethod: "stripe",
     saveInfo: false,
   })
+  useGooglePlacesAutocomplete((updater) => setFormData((prev) => updater(prev)))
 
   const [orderId, setOrderId] = useState<string | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
@@ -298,9 +302,9 @@ export function CheckoutFlow() {
   }
 
   const isEmailValid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  const normalizedCountry = normalizeCountryCode(formData.country)
 
   const createOrderAndPaymentIntent = async () => {
-    // Create the order
     const orderRes = await fetch("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...csrfHeader() },
@@ -320,7 +324,7 @@ export function CheckoutFlow() {
           city: formData.city,
           state: formData.state,
           postalCode: formData.postalCode,
-          country: formData.country,
+          country: normalizedCountry || formData.country,
           lat: formData.lat,
           lng: formData.lng,
         },
@@ -342,7 +346,6 @@ export function CheckoutFlow() {
         const { clientSecret } = await piRes.json()
         setClientSecret(clientSecret)
       } else {
-        // Stripe not configured or failed; proceed with PayPal or manual confirmation
         setClientSecret(null)
       }
     } catch {
@@ -360,6 +363,12 @@ export function CheckoutFlow() {
       try {
         if (!isEmailValid(formData.email)) {
           throw new Error("Please enter a valid email address.")
+        }
+        if (!formData.firstName || !formData.lastName) {
+          throw new Error("Please enter your name.")
+        }
+        if (!formData.addressLine1 || !formData.city || !formData.state || !formData.postalCode) {
+          throw new Error("Please complete your shipping address.")
         }
         await createOrderAndPaymentIntent()
         track("add_shipping_info", { orderId, email: formData.email })
@@ -390,21 +399,14 @@ export function CheckoutFlow() {
             <div key={step} className="flex items-center">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  currentStep >= step
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-gray-200 text-gray-600"
+                  currentStep >= step ? "bg-primary text-primary-foreground" : "bg-gray-200 text-gray-600"
                 }`}
                 aria-current={currentStep === step ? "step" : undefined}
               >
                 {step}
               </div>
               {step < 3 && (
-                <div
-                  className={`w-16 h-1 mx-2 ${
-                    currentStep > step ? "bg-primary" : "bg-gray-200"
-                  }`}
-                  aria-hidden="true"
-                />
+                <div className={`w-16 h-1 mx-2 ${currentStep > step ? "bg-primary" : "bg-gray-200"}`} aria-hidden="true" />
               )}
             </div>
           ))}
@@ -428,7 +430,13 @@ export function CheckoutFlow() {
                     onChange={(e) => handleInputChange("firstName", e.target.value)}
                     placeholder="First Name"
                     aria-invalid={!formData.firstName ? true : undefined}
+                    aria-describedby="firstName-error"
                   />
+                  {!formData.firstName && (
+                    <p id="firstName-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                      Please enter your first name.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="lastName">Last Name</Label>
@@ -438,7 +446,13 @@ export function CheckoutFlow() {
                     onChange={(e) => handleInputChange("lastName", e.target.value)}
                     placeholder="Last Name"
                     aria-invalid={!formData.lastName ? true : undefined}
+                    aria-describedby="lastName-error"
                   />
+                  {!formData.lastName && (
+                    <p id="lastName-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                      Please enter your last name.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -472,63 +486,114 @@ export function CheckoutFlow() {
               </div>
 
               <div className="grid grid-cols-1 gap-3">
-               <ddiv>
-                 < Label htmlFor="addressLine1">Address Line</
- Label>
-                 <oInput
+                <div>
+                  <Label htmlFor="addressLine1">Address Line 1</Label>
+                  <Input
                     id="addressLine1"
                     value={formData.addressLine1}
                     onChange={(e) => handleInputChange("addressLine1", e.target.value)}
                     placeholder="Street address"
                     aria-invalid={!formData.addressLine1 ? true : undefined}
+                    aria-describedby="addressLine1-error"
                   />
-              </  div>
-               < div>
-                 < Label htmlFor="addressLine2">Address Line</ 2Label>
-                 < Input
+                  {!formData.addressLine1 && (
+                    <p id="addressLine1-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                      Please enter your street address.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="addressLine2">Address Line 2</Label>
+                  <Input
                     id="addressLine2"
                     value={formData.addressLine2}
                     onChange={(e) => handleInputChange("addressLine2", e.target.value)}
                     placeholder="Apt, suite, unit (optional)"
                   />
-              </  div>
-               < div className="grid grid-cols-3 gap-3">
-                 < div>
-                   < Label htmlFor="city">Ci</tyLabel>
-                   < Input
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Input
                       id="city"
                       value={formData.city}
                       onChange={(e) => handleInputChange("city", e.target.value)}
                       aria-invalid={!formData.city ? true : undefined}
+                      aria-describedby="city-error"
                     />
-                </  div>
-                 < div>
-                   < Label htmlFor="state">Sta</teLabel>
-                   < Input
+                    {!formData.city && (
+                      <p id="city-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                        Please enter your city.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="state">State</Label>
+                    <Input
                       id="state"
                       value={formData.state}
                       onChange={(e) => handleInputChange("state", e.target.value)}
                       aria-invalid={!formData.state ? true : undefined}
+                      aria-describedby="state-error"
                     />
-                </  div>
-                 < div>
-                   < Label htmlFor="postalCode">Postal Co</deLabel>
-                   < Input
+                    {!formData.state && (
+                      <p id="state-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                        Please enter your state or region.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="postalCode">Postal Code</Label>
+                    <Input
                       id="postalCode"
                       value={formData.postalCode}
                       onChange={(e) => handleInputChange("postalCode", e.target.value)}
                       aria-invalid={!formData.postalCode ? true : undefined}
+                      aria-describedby="postalCode-error"
                     />
-                </  div>
-              </  div>
-               < div>
-                 < Label htmlFor="country">Count</ryLabel>
-                 < >
+                    {!formData.postalCode && (
+                      <p id="postalCode-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                        Please enter your postal code.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="country">Country</Label>
+                  <Input
+                    id="country"
+                    value={formData.country}
+                    onChange={(e) => handleInputChange("country", e.target.value)}
+                    onBlur={() => {
+                      const normalized = normalizeCountryCode(formData.country)
+                      if (normalized) {
+                        setFormData((prev) => ({ ...prev, country: normalized }))
+                      }
+                    }}
+                    aria-describedby="country-error"
+                  />
+                  {formData.country && !normalizedCountry && (
+                    <p id="country-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                      Country should be a 2-letter code (e.g., US, GB) or a recognizable country name.
+                    </p>
+                  )}
+                </div>
+              </div>
 
               <Button
                 onClick={() => handleStepComplete(1)}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                disabled={isProcessing || !formData.firstName || !formData.lastName || !formData.email || !formData.address || !isEmailValid(formData.email)}
+                disabled={
+                  isProcessing ||
+                  !formData.firstName ||
+                  !formData.lastName ||
+                  !formData.email ||
+                  !isEmailValid(formData.email) ||
+                  !formData.addressLine1 ||
+                  !formData.city ||
+                  !formData.state ||
+                  !formData.postalCode
+                }
                 type="button"
               >
                 {isProcessing ? "Preparing Payment..." : "Continue to Payment"}
@@ -615,11 +680,6 @@ export function CheckoutFlow() {
 
                   {currentStep === 3 && (
                     <StripeReviewAndPlaceOrder
-                      email={formData.email}
-                      firstName={formData.firstName}
-                      lastName={formData.lastName}
-                      address={formData.address}
-                      phoneNumber={formData.phoneNumber}
                       orderId={orderId}
                       isProcessing={isProcessing}
                       onProcessing={setIsProcessing}
@@ -686,7 +746,13 @@ export function CheckoutFlow() {
                           <p className="text-sm text-gray-600">
                             {formData.firstName} {formData.lastName}
                           </p>
-                          <p className="text-sm text-gray-600">{formData.address}</p>
+                          <p className="text-sm text-gray-600">
+                            {formData.addressLine1}
+                            {formData.addressLine2 ? `, ${formData.addressLine2}` : ""}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {formData.city}, {formData.state} {formData.postalCode} {formData.country}
+                          </p>
                           <p className="text-sm text-gray-600">{formData.email}</p>
                           <p className="text-sm text-gray-600">{formData.phoneNumber}</p>
                           <button className="text-sm text-blue-600 underline mt-2" onClick={() => setCurrentStep(1)} type="button">
@@ -812,6 +878,19 @@ export function CheckoutFlow() {
                       <p className="text-sm text-gray-600">
                         Qty: {item.quantity}
                         {item.material && ` | Material: ${item.material}`}
+                        {item.dimensions && ` | Dimensions: ${item.dimensions}`}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
                         {item.dimensions && ` | Dimensions: ${item.dimensions}`}
                       </p>
                     </div>
