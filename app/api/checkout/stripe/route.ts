@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { prisma } from "@/lib/db"
+import { limit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
+import * as Sentry from "@sentry/nextjs"
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY || ""
 const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" }) : null
 
 export async function POST(req: NextRequest) {
+  // Rate limit checkout intent creation per IP
+  const ip = getClientIp(req)
+  const ok = await limit(`checkout:stripe:${ip}`)
+  if (!ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+
   if (!stripe) return NextResponse.json({ error: "Stripe not configured" }, { status: 500 })
   const { orderId } = (await req.json().catch(() => ({}))) as { orderId?: string }
   if (!orderId) return NextResponse.json({ error: "orderId required" }, { status: 400 })
@@ -65,6 +73,7 @@ export async function POST(req: NextRequest) {
       })
     }
   } catch (e: any) {
+    try { Sentry.captureException(e) } catch {}
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 

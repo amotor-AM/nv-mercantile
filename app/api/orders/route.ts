@@ -3,6 +3,9 @@ import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
 import { OrderCreateSchema } from "@/lib/validation"
 import { normalizeCountryCode } from "@/lib/utils"
+import { limit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
+import * as Sentry from "@sentry/nextjs"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -41,6 +44,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit order creation per IP
+  const ip = getClientIp(req)
+  const ok = await limit(`orders:create:${ip}`)
+  if (!ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+
   const session = await auth()
   const json = await req.json().catch(() => null)
   if (!json) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
@@ -164,6 +172,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(order, { status: 201 })
     } catch (e) {
+      try { Sentry.captureException(e as any) } catch {}
       return NextResponse.json({ error: "Address verification failed" }, { status: 500 })
     }
   }

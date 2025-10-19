@@ -50,7 +50,8 @@ export async function GET(req: NextRequest) {
     if (list.length) where.applications = { hasSome: list }
   }
   if (inStock === "true") {
-    where.OR = [...(where.OR || []), { inStock: true }, { stockLevel: { gt: 0 } }]
+    // Tighten filter to rely solely on aggregate inStock semantics
+    where.AND = [...(where.AND || []), { inStock: true }]
   }
   if (ratingMin) {
     where.rating = { gte: Number(ratingMin) }

@@ -32,21 +32,25 @@ export async function GET(req: NextRequest) {
   // Attempt to locate order by custom_id from original create request
   const purchase = (response.result.purchase_units || [])[0]
   const customId = purchase?.custom_id
+  const captureId = (response.result?.purchase_units?.[0]?.payments?.captures?.[0]?.id) || response.result?.id
   if (customId) {
     const allowBackorder = (process.env.ALLOW_BACKORDER || "false").toLowerCase() === "true"
+
+    const existing = await prisma.order.findUnique({ where: { id: customId }, include: { items: true } })
+    if (!existing) return NextResponse.json({ error: "Order not found" }, { status: 404 })
+
+    // Idempotency guard using paymentProcessedId
+    if (existing.paymentProcessedId) {
+      return NextResponse.json({ ok: true })
+    }
+
     const order = await prisma.order.update({
       where: { id: customId },
-      data: { status: "PAID", paymentProvider: "paypal" },
+      data: { status: "PAID", paymentProvider: "paypal", paymentProcessedId: String(captureId || ""), paidAt: new Date() },
       include: { items: true },
     })
 
-    // Idempotency guard per item: skip if SALE movement already exists for this order
     for (const it of order.items) {
-      const already = await prisma.inventoryMovement.findFirst({
-        where: { productId: it.productId, type: "SALE", note: `Order ${order.orderNumber}` },
-      })
-      if (already) continue
-
       const product = await prisma.product.findUnique({ where: { id: it.productId } })
       if (!product) continue
 
@@ -69,7 +73,7 @@ export async function GET(req: NextRequest) {
     }
 
     await incCounter("payment_success")
+    try {
+      await sendOrderConfirmationEmail(customId)
+    } catch {}
   }
-
-  return NextResponse.json({ ok: true })
-}

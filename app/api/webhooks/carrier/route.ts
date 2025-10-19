@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { applyShipmentStatusUpdate, mapProviderStatusToShipmentStatus } from "@/lib/shipping"
 import { incCounter } from "@/lib/metrics"
 import { getClientIp, logAdminAction } from "@/lib/security"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Carrier webhook endpoint
@@ -17,6 +18,24 @@ import { getClientIp, logAdminAction } from "@/lib/security"
  * }
  */
 export async function POST(req: NextRequest) {
+  // Shared secret validation
+  const provided = req.headers.get("x-carrier-secret") || ""
+  const expected = process.env.CARRIER_WEBHOOK_SECRET || ""
+  if (!expected || provided !== expected) {
+    await incCounter("webhook_error_carrier")
+    try {
+      await logAdminAction({
+        action: "webhook.error",
+        targetType: "Carrier",
+        targetId: null,
+        payload: { reason: "unauthorized" },
+        ip: getClientIp(req),
+        userAgent: req.headers.get("user-agent"),
+      })
+    } catch {}
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const body = await req.json().catch(() => null)
   if (!body) {
     await incCounter("webhook_error_carrier")
@@ -30,6 +49,7 @@ export async function POST(req: NextRequest) {
         userAgent: req.headers.get("user-agent"),
       })
     } catch {}
+    try { Sentry.captureException(new Error("Carrier webhook invalid JSON")) } catch {}
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
@@ -78,6 +98,7 @@ export async function POST(req: NextRequest) {
         userAgent: req.headers.get("user-agent"),
       })
     } catch {}
+    try { Sentry.captureException(new Error("Carrier webhook missing tracking identifier")) } catch {}
     return NextResponse.json({ error: "Missing tracking identifier" }, { status: 400 })
   }
   const status = mapProviderStatusToShipmentStatus(statusRaw || "pre_transit")

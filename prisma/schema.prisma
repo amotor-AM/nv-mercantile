@@ -101,6 +101,7 @@ model Order {
   currency        String       @default("usd")
   paymentProvider String?
   paymentIntentId String?
+  paymentProcessedId String?   // idempotency guard: provider-specific processed id (e.g., Stripe PI id or PayPal capture id)
   refundStatus    RefundStatus @default(NONE)
   items           OrderItem[]
   refunds         Refund[]
@@ -123,6 +124,7 @@ model Order {
   trackingNumber  String?
   trackingUrl     String?
   shippedAt       DateTime?
+  paidAt          DateTime?    // set when payment finalized
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 }

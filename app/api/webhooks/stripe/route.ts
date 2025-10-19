@@ -4,27 +4,34 @@ import { prisma } from "@/lib/db"
 import { sendOrderConfirmationEmail } from "@/lib/email"
 import { incCounter } from "@/lib/metrics"
 import { getClientIp, logAdminAction } from "@/lib/security"
+import * as Sentry from "@sentry/nextjs"
 
 import { computeBoundedStockLevel, recomputeProductInStock } from "@/lib/inventory"
 
 async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
   const allowBackorder = (process.env.ALLOW_BACKORDER || "false").toLowerCase() === "true"
 
-  // Update order and decrement stock from items
+  // Read order and idempotency guard using paymentProcessedId
+  const existing = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } })
+  if (!existing) return
+  if (existing.paymentProcessedId) {
+    // already processed, skip
+    return
+  }
+
+  // Update order with PAID, link intent id, set processed id and paidAt
   const order = await prisma.order.update({
     where: { id: orderId },
-    data: { status: "PAID", ...(paymentIntentId ? { paymentIntentId } : {}) },
+    data: {
+      status: "PAID",
+      ...(paymentIntentId ? { paymentIntentId } : {}),
+      paymentProcessedId: paymentIntentId ?? existing.paymentIntentId ?? null,
+      paidAt: new Date(),
+    },
     include: { items: true },
   })
 
-  // Idempotency guard: if SALE movements already exist for this order, skip processing
-  // This checks per item to also support partial order updates if necessary.
   for (const it of order.items) {
-    const already = await prisma.inventoryMovement.findFirst({
-      where: { productId: it.productId, type: "SALE", note: `Order ${order.orderNumber}` },
-    })
-    if (already) continue
-
     const product = await prisma.product.findUnique({ where: { id: it.productId } })
     if (!product) continue
     const nextLevel = computeBoundedStockLevel(product.stockLevel ?? 0, -Math.abs(it.quantity), allowBackorder)
@@ -54,7 +61,7 @@ async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
   try {
     await sendOrderConfirmationEmail(orderId)
   } catch (e) {
-    // swallow email errors
+    Sentry.captureException(e)
   }
 }
 
