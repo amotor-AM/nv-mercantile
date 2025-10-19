@@ -9,6 +9,16 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
 import { csrfHeader } from "@/lib/csrf"
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -20,11 +30,13 @@ export default function AdminOrderDetails() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [confirmPartialOpen, setConfirmPartialOpen] = useState(false)
+  const [confirmFullOpen, setConfirmFullOpen] = useState(false)
 
   const total = useMemo(() => (order ? order.total : 0), [order])
   const items = order?.items || []
 
-  const submitPartialRefund = async () => {
+  const performPartialRefund = async () => {
     setBusy(true); setError(null); setSuccess(null)
     const dollars = Number(partialAmount)
     if (!isFinite(dollars) || dollars <= 0) {
@@ -52,10 +64,11 @@ export default function AdminOrderDetails() {
       setError(e?.message || "Refund error")
     } finally {
       setBusy(false)
+      setConfirmPartialOpen(false)
     }
   }
 
-  const submitFullRefund = async () => {
+  const performFullRefund = async () => {
     setBusy(true); setError(null); setSuccess(null)
     try {
       const res = await fetch(`/api/orders/${params.id}/refund`, {
@@ -73,6 +86,7 @@ export default function AdminOrderDetails() {
       setError(e?.message || "Refund error")
     } finally {
       setBusy(false)
+      setConfirmFullOpen(false)
     }
   }
 
@@ -164,11 +178,41 @@ export default function AdminOrderDetails() {
                 placeholder="Reason (optional)"
               />
               <div className="flex gap-2">
-                <Button variant="outline" disabled={busy} onClick={submitPartialRefund}>Issue partial refund</Button>
-                <Button disabled={busy} onClick={submitFullRefund}>Issue full refund</Button>
+                <Button variant="outline" disabled={busy} onClick={() => setConfirmPartialOpen(true)}>Issue partial refund</Button>
+                <Button disabled={busy} onClick={() => setConfirmFullOpen(true)}>Issue full refund</Button>
               </div>
             </div>
           </div>
+
+          <AlertDialog open={confirmPartialOpen} onOpenChange={setConfirmPartialOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirm partial refund</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will issue a refund of ${Number(partialAmount || 0).toFixed(2)} to the customer.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+                <AlertDialogAction disabled={busy} onClick={performPartialRefund}>Confirm</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog open={confirmFullOpen} onOpenChange={setConfirmFullOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirm full refund</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will refund the full amount of ${(total / 100).toFixed(2)} and mark the order as REFUNDED.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+                <AlertDialogAction disabled={busy} onClick={performFullRefund}>Confirm</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       )}
     </div>
