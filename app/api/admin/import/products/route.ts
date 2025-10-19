@@ -23,13 +23,18 @@ export async function POST(req: NextRequest) {
     const slug = r.slug || r.id
     if (!slug) continue
     const price = Number(r.price ?? 0)
+    let categoryId: string | undefined = undefined
+    const categorySlug = r.category || ""
+    if (categorySlug) {
+      const cat = await prisma.category.findUnique({ where: { slug: categorySlug } })
+      categoryId = cat?.id ?? undefined
+    }
     const data: any = {
       slug,
       name: r.name || slug,
       subtitle: r.subtitle || "",
       price: isNaN(price) ? 0 : price,
       material: r.material || "",
-      category: r.category || "",
       leadTime: r.leadTime || "2-3 weeks",
       leadTimeDays: Number(r.leadTimeDays ?? 7),
       stockLevel: Number(r.stockLevel ?? 0),
@@ -42,6 +47,7 @@ export async function POST(req: NextRequest) {
       weight: r.weight || "",
       specifications: {},
       applications: [],
+      categoryId,
     }
     await prisma.product.upsert({
       where: { slug },

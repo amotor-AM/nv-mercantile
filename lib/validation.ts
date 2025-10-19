@@ -6,7 +6,8 @@ export const ProductCreateSchema = z.object({
   subtitle: z.string().max(256).optional(),
   price: z.number().positive(),
   material: z.string().max(128).optional(),
-  category: z.string().max(128).optional(),
+  category: z.string().max(128).optional(), // slug
+  categoryId: z.string().optional(),
   leadTime: z.string().max(128).optional(),
   description: z.string().optional(),
   image: z.string().url().optional(),

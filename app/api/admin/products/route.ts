@@ -13,6 +13,7 @@ export async function GET() {
   const items = await prisma.product.findMany({
     orderBy: { name: "asc" },
     take: 1000,
+    include: { category: true },
   })
   return NextResponse.json(items)
 }
@@ -30,6 +31,25 @@ export async function POST(req: NextRequest) {
   }
 
   const body = parsed.data
+
+  // Optional attribute governance validation
+  const defs = await prisma.allowedAttribute.findMany({ where: { key: { in: ["material","leadTime","tolerance"] }, isActive: true } })
+  const map = new Map(defs.map((d) => [d.key, d]))
+  for (const key of ["material","leadTime","tolerance"] as const) {
+    const def = map.get(key)
+    const val = (body as any)[key]
+    if (def && def.options.length && val && !def.options.includes(val)) {
+      return NextResponse.json({ error: `Invalid ${key}: ${val}` }, { status: 422 })
+    }
+  }
+
+  let categoryId: string | null = null
+  if (body.categoryId) {
+    categoryId = body.categoryId
+  } else if (body.category) {
+    const cat = await prisma.category.findUnique({ where: { slug: body.category } })
+    categoryId = cat?.id ?? null
+  }
   const created = await prisma.product.create({
     data: {
       slug: body.slug,
@@ -37,7 +57,6 @@ export async function POST(req: NextRequest) {
       subtitle: body.subtitle ?? "",
       price: body.price,
       material: body.material ?? "",
-      category: body.category ?? "",
       leadTime: body.leadTime ?? "2-3 weeks",
       description: body.description ?? "",
       image: body.image ?? "",
@@ -50,6 +69,7 @@ export async function POST(req: NextRequest) {
       safetyStock: body.safetyStock ?? 0,
       reorderPoint: body.reorderPoint ?? 0,
       leadTimeDays: body.leadTimeDays ?? 7,
+      categoryId: categoryId ?? undefined,
     },
   })
 

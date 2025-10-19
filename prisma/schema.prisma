@@ -48,13 +48,16 @@ model Product {
   safetyStock    Int          @default(0)
   reorderPoint   Int          @default(0)
   leadTimeDays   Int          @default(7)
-  category       String
+  category       Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId     String?
   orderItems     OrderItem[]
   movements      InventoryMovement[]
   variants       Variant[]
   images         ProductImage[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([categoryId])
 }
 
 model Variant {
@@ -235,6 +238,61 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   @@index([createdAt])
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  description String?
+  isVisible   Boolean    @default(true)
+  order       Int        @default(0)
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryHierarchy")
+  products    Product[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([isVisible, order])
+  @@index([parentId])
+}
+
+enum NavigationLocation {
+  HEADER
+  FOOTER
+}
+
+model NavigationItem {
+  id        String             @id @default(cuid())
+  location  NavigationLocation
+  key       String
+  label     String
+  url       String
+  icon      String?
+  order     Int                @default(0)
+  isVisible Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([location, key])
+  @@index([location, order])
+}
+
+enum AttributeType {
+  STRING
+  NUMBER
+}
+
+model AllowedAttribute {
+  id        String        @id @default(cuid())
+  key       String        @unique
+  label     String
+  type      AttributeType @default(STRING)
+  options   String[]      // if present, values must be one of these
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 }
 
 enum Role {

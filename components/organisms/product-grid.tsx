@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Grid3X3, List } from "lucide-react"
 import { ProductCard } from "@/components/molecules/product-card"
-import { getProductsByCategory } from "@/lib/product-data"
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 interface ProductGridProps {
   category: string
@@ -15,7 +17,8 @@ export function ProductGrid({ category }: ProductGridProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [sortBy, setSortBy] = useState<string>("featured")
 
-  const categoryProducts = getProductsByCategory(category)
+  const { data } = useSWR(`/api/products?category=${encodeURIComponent(category)}&pageSize=100`, fetcher)
+  const categoryProducts = (data?.items ?? []) as Array<any>
 
   const sortedProducts = [...categoryProducts].sort((a, b) => {
     switch (sortBy) {
@@ -24,8 +27,7 @@ export function ProductGrid({ category }: ProductGridProps) {
       case "price-high":
         return b.price - a.price
       case "newest":
-        // Since we don't have createdAt, just return original order
-        return 0
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       default:
         return 0
     }

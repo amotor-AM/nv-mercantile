@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import useSWR from "swr"
 import Link from "next/link"
 import { Search, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -9,6 +10,8 @@ import { CartIcon } from "@/components/cart-icon"
 import { useRouter } from "next/navigation"
 import { useSession, signIn, signOut } from "next-auth/react"
 
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -16,6 +19,8 @@ export function Header() {
   const [showSearchResults, setShowSearchResults] = useState(false)
   const router = useRouter()
   const { data: session } = useSession()
+  const { data: navItems } = useSWR("/api/navigation?location=HEADER", fetcher)
+  const items = (navItems ?? []) as Array<{ id: string; label: string; url: string }>
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query)
@@ -49,7 +54,8 @@ export function Header() {
     if (searchQuery.trim()) {
       setShowSearchResults(false)
       setSearchQuery("")
-      router.push(`/machined-parts?q=${encodeURIComponent(searchQuery)}`)
+      const dest = Array.isArray(items) && items.length ? items[0].url : "/"
+      router.push(`${dest}?q=${encodeURIComponent(searchQuery)}`)
     }
   }
 
@@ -75,18 +81,11 @@ export function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/machined-parts" className="font-medium hover:text-primary">
-              Machined Parts
-            </Link>
-            <Link href="/metalwork" className="font-medium hover:text-primary">
-              Metalwork
-            </Link>
-            <Link href="/3d-prints" className="font-medium hover:text-primary">
-              3D Prints
-            </Link>
-            <Link href="/custom-orders" className="font-medium hover:text-primary">
-              Custom Orders
-            </Link>
+            {items.map((it) => (
+              <Link key={it.id} href={it.url} className="font-medium hover:text-primary">
+                {it.label}
+              </Link>
+            ))}
             {session?.user?.role === "ADMIN" && (
               <Link href="/admin" className="font-medium hover:text-primary">
                 Admin
@@ -167,18 +166,11 @@ export function Header() {
         {isMenuOpen && (
           <div className="md:hidden border-t border-border py-4">
             <nav className="flex flex-col space-y-4">
-              <Link href="/machined-parts" className="font-medium hover:text-primary">
-                Machined Parts
-              </Link>
-              <Link href="/metalwork" className="font-medium hover:text-primary">
-                Metalwork
-              </Link>
-              <Link href="/3d-prints" className="font-medium hover:text-primary">
-                3D Prints
-              </Link>
-              <Link href="/custom-orders" className="font-medium hover:text-primary">
-                Custom Orders
-              </Link>
+              {items.map((it) => (
+                <Link key={it.id} href={it.url} className="font-medium hover:text-primary">
+                  {it.label}
+                </Link>
+              ))}
               <div className="flex items-center bg-muted rounded-full px-4 py-2 mt-4">
                 <Search className="w-4 h-4 text-muted-foreground mr-2" />
                 <Input 

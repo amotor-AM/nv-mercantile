@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const page = Number(searchParams.get("page") ?? "1")
   const pageSize = Math.min(Number(searchParams.get("pageSize") ?? "20"), 100)
-  const category = searchParams.get("category") ?? undefined
+  const categorySlug = searchParams.get("category") ?? undefined
   const q = searchParams.get("q") ?? undefined
   const minPrice = searchParams.get("minPrice")
   const maxPrice = searchParams.get("maxPrice")
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const sort = searchParams.get("sort") // price_asc | price_desc | newest | rating_desc
 
   const where: any = {}
-  if (category) where.category = category
+  if (categorySlug) where.category = { is: { slug: categorySlug } }
   if (q) {
     where.OR = [
       { name: { contains: q, mode: "insensitive" } },
@@ -62,16 +62,21 @@ export async function GET(req: NextRequest) {
   else if (sort === "rating_desc") orderBy = { rating: "desc" }
   else if (sort === "newest") orderBy = { createdAt: "desc" }
 
-  const [items, total, categoriesAgg, materialsAgg] = await Promise.all([
+  const [items, total, materialsAgg, categories] = await Promise.all([
     prisma.product.findMany({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy,
+      include: { category: true },
     }),
     prisma.product.count({ where }),
-    prisma.product.groupBy({ by: ["category"], _count: { _all: true } }),
     prisma.product.groupBy({ by: ["material"], _count: { _all: true } }),
+    prisma.category.findMany({
+      where: { isVisible: true },
+      orderBy: { order: "asc" },
+      include: { _count: { select: { products: true } } },
+    }),
   ])
 
   // derive application facets from current result set (could be from full set if needed)
@@ -89,8 +94,8 @@ export async function GET(req: NextRequest) {
     total,
     items,
     facets: {
-      categories: categoriesAgg.map((c) => ({ name: c.category, count: c._count._all })),
-      materials: materialsAgg.map((m) => ({ name: m.material, count: m._count._all })),
+      categories: categories.map((c) => ({ slug: c.slug, name: c.name, count: c._count.products })),
+      materials: materialsAgg.map((m) => ({ name: m.material, count: m._})),
       applications: applicationsAgg,
     },
   })

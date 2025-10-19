@@ -1,7 +1,15 @@
+"use client"
+
+import useSWR from "swr"
 import Link from "next/link"
 import { Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin, Clock } from "lucide-react"
 
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
 export function Footer() {
+  const { data: navItems } = useSWR("/api/navigation?location=FOOTER", fetcher)
+  const items = (navItems ?? []) as Array<{ id: string; label: string; url: string }>
+
   return (
     <footer className="bg-foreground text-background py-16">
       <div className="max-w-7xl mx-auto px-4">
@@ -33,26 +41,13 @@ export function Footer() {
           <div>
             <h3 className="font-semibold mb-4">Products</h3>
             <ul className="space-y-2 text-sm">
-              <li>
-                <Link href="/machined-parts" className="hover:text-primary transition-colors">
-                  Machined Parts
-                </Link>
-              </li>
-              <li>
-                <Link href="/metalwork" className="hover:text-primary transition-colors">
-                  Metalwork
-                </Link>
-              </li>
-              <li>
-                <Link href="/3d-prints" className="hover:text-primary transition-colors">
-                  3D Prints
-                </Link>
-              </li>
-              <li>
-                <Link href="/custom-orders" className="hover:text-primary transition-colors">
-                  Custom Orders
-                </Link>
-              </li>
+              {items.map((it) => (
+                <li key={it.id}>
+                  <Link href={it.url} className="hover:text-primary transition-colors">
+                    {it.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 

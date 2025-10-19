@@ -21,20 +21,10 @@ export function Breadcrumb({ productId }: BreadcrumbProps) {
     )
   }
 
-  // Map category to proper route and display name
+  // Map category to dynamic route; fall back to generic label
   const getCategoryInfo = (category: string) => {
-    switch (category) {
-      case "machined-parts":
-        return { link: "/machined-parts", name: "Machined Parts" }
-      case "metalwork":
-        return { link: "/metalwork", name: "Metalwork" }
-      case "3d-prints":
-        return { link: "/3d-prints", name: "3D Prints" }
-      case "custom-orders":
-        return { link: "/custom-orders", name: "Custom Orders" }
-      default:
-        return { link: "/", name: "Products" }
-    }
+    const name = category.replace(/-/g, " ").replace(/\b\w/g, (m) => m.toUpperCase())
+    return { link: `/category/${category}`, name }
   }
 
   const categoryInfo = getCategoryInfo(product.category)
