@@ -114,11 +114,15 @@ function PaymentRequestExpress({
   clientSecret,
   orderId,
   amount,
+  country,
+  currency,
   onSuccess,
 }: {
   clientSecret: string
   orderId: string
   amount: number // cents
+  country: string // ISO 3166-1 alpha-2
+  currency: string // ISO currency code (e.g., "usd")
   onSuccess: () => void
 }) {
   const stripe = useStripe()
@@ -130,8 +134,8 @@ function PaymentRequestExpress({
     async function init() {
       if (!stripe || !clientSecret) return
       const pr = stripe.paymentRequest({
-        country: "US",
-        currency: "usd",
+        country,
+        currency,
         total: { label: "NV Mercantile", amount },
         requestPayerEmail: true,
         requestPayerName: true,
@@ -165,7 +169,7 @@ function PaymentRequestExpress({
     return () => {
       mounted = false
     }
-  }, [stripe, clientSecret, amount, onSuccess])
+  }, [stripe, clientSecret, amount, country, currency, onSuccess])
 
   if (!ready || !paymentRequest) return null
 
@@ -652,6 +656,8 @@ export function CheckoutFlow() {
                           clientSecret={clientSecret}
                           orderId={orderId}
                           amount={Math.round(total * 100)}
+                          country={normalizedCountry || "US"}
+                          currency={"usd"}
                           onSuccess={() => {
                             clearCart()
                             router.push(`/order-confirmation?order=${orderId}`)
@@ -694,10 +700,10 @@ export function CheckoutFlow() {
                 // PayPal or Stripe not yet initialized
                 <>
                   {currentStep === 2 && (
-                    <div className="space-y-6">
-                      <h2 className="text-2xl font-medium">Payment Information</h2>
+                   <<div className="space-y-6">
+                     <<h2 className="text-2xl font-medium">Payment Informati</</h2>
 
-                      <div className="space-y-3">
+                      {providerError &&pace-y-3">
                         <Label>Payment Method</Label>
                         <div className="flex gap-3">
                           <button
@@ -878,19 +884,6 @@ export function CheckoutFlow() {
                       <p className="text-sm text-gray-600">
                         Qty: {item.quantity}
                         {item.material && ` | Material: ${item.material}`}
-                        {item.dimensions && ` | Dimensions: ${item.dimensions}`}
-                      </p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
                         {item.dimensions && ` | Dimensions: ${item.dimensions}`}
                       </p>
                     </div>

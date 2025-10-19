@@ -5,6 +5,8 @@ import { sendOrderConfirmationEmail } from "@/lib/email"
 import { incCounter } from "@/lib/metrics"
 import { getClientIp, logAdminAction } from "@/lib/security"
 
+import { nextStockState } from "@/lib/inventory"
+
 async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
   // Update order and decrement stock from items
   const order = await prisma.order.update({
@@ -15,20 +17,16 @@ async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
 
   // Decrement stock and create inventory movements
   for (const it of order.items) {
+    const product = await prisma.product.findUnique({ where: { id: it.productId } })
+    if (!product) continue
+    const { stockLevel, inStock } = nextStockState(product.stockLevel ?? 0, -Math.abs(it.quantity))
     await prisma.product.update({
       where: { id: it.productId },
       data: {
-        stockLevel: { decrement: it.quantity },
-        inStock: undefined, // will adjust below
+        stockLevel, // set explicitly to avoid multiple writes
+        inStock,
       },
     })
-
-    const product = await prisma.product.findUnique({ where: { id: it.productId } })
-    if (product) {
-      if (product.stockLevel <= 0) {
-        await prisma.product.update({ where: { id: it.productId }, data: { inStock: false } })
-      }
-    }
 
     await prisma.inventoryMovement.create({
       data: {

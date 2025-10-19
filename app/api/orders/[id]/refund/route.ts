@@ -3,8 +3,9 @@ import { prisma } from "@/lib/db"
 import Stripe from "stripe"
 import { auth } from "@/auth"
 import { sendRefundEmail } from "@/lib/email"
+import { logAdminAction, getClientIp } from "@/lib/security"
 
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await auth()
   const isAdmin = (session as any)?.user?.role === "ADMIN"
   if (!isAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -23,6 +24,18 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
   await prisma.order.update({ where: { id: order.id }, data: { status: "REFUNDED", refundStatus: "FULL" } })
   try {
     await sendRefundEmail(order.id)
+  } catch {}
+
+  try {
+    await logAdminAction({
+      userId: session?.user?.id ?? null,
+      action: "order.refund",
+      targetType: "Order",
+      targetId: order.id,
+      payload: { paymentProvider: order.paymentProvider, paymentIntentId: order.paymentIntentId },
+      ip: getClientIp(req as any),
+      userAgent: (req as any).headers.get("user-agent"),
+    })
   } catch {}
 
   return NextResponse.json({ ok: true })

@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { InventoryAdjustSchema } from "@/lib/validation"
 import { getClientIp, logAdminAction } from "@/lib/security"
+import { nextStockState } from "@/lib/inventory"
 
 export async function POST(req: NextRequest, { params }: { params: { productId: string } }) {
   const session = await auth()
@@ -28,11 +29,13 @@ export async function POST(req: NextRequest, { params }: { params: { productId: 
     delta = Math.abs(quantity)
   }
 
+  const { inStock } = nextStockState(product.stockLevel ?? 0, delta)
+
   const updated = await prisma.product.update({
     where: { id: product.id },
     data: {
       stockLevel: { increment: delta },
-      inStock: product.stockLevel + delta > 0,
+      inStock,
     },
   })
 
