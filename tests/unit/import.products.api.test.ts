@@ -3,7 +3,7 @@ import { prisma } from "../../lib/db"
 import { POST as importProductsPost } from "../../app/api/admin/import/products/route"
 
 // Mock auth to return ADMIN role
-vi.mock("../../auth", () => ({
+vi.mock("@/auth", () => ({
   auth: async () => ({ user: { id: "u_admin", role: "ADMIN", email: "admin@test.local" } }),
 }))
 

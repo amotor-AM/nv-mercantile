@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { productId: 
     where: { id: product.id },
     data: {
       stockLevel: { increment: delta },
-      inStock: product.inStock || delta > 0 ? true : product.inStock,
+      inStock: product.stockLevel + delta > 0,
     },
   })
 

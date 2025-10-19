@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   // Mark device as trusted and set cookie
   res.cookies.set("nv_2fa_ok", "true", {
     path: "/",
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     // Trust for 30 days
     maxAge: 60 * 60 * 24 * 30,

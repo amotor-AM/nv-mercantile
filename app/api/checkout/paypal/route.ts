@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
   const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } })
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 })
 
+  const amount = order.items.reduce((sum, i) => sum + i.price * i.quantity, 0)
+
   const request = new paypal.orders.OrdersCreateRequest()
   request.prefer("return=representation")
   request.requestBody({
@@ -31,7 +33,7 @@ export async function POST(req: NextRequest) {
       {
         amount: {
           currency_code: order.currency.toUpperCase(),
-          value: (order.total / 100).toFixed(2),
+          value: (amount / 100).toFixed(2),
         },
         custom_id: order.id,
       },
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
   const response = await client.execute(request as any)
   await prisma.order.update({
     where: { id: order.id },
-    data: { status: "AWAITING_PAYMENT", paymentProvider: "paypal", paymentIntentId: String(response.result.id) },
+    data: { status: "AWAITING_PAYMENT", paymentProvider: "paypal", paymentIntentId: String(response.result.id), total: amount },
   })
 
   const approve = response.result.links?.find((l: any) => l.rel === "approve")?.href

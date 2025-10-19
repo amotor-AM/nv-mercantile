@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterAll } from "vitest"
 import { prisma } from "../../lib/db"
 
 // Mock auth to return ADMIN role for API route
-vi.mock("../../auth", () => ({
+vi.mock("@/auth", () => ({
   auth: async () => ({ user: { id: "u_admin", role: "ADMIN", email: "admin@test.local" } }),
 }))
 

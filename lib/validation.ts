@@ -26,7 +26,8 @@ export const ProductUpdateSchema = ProductCreateSchema.partial().extend({
 })
 
 export const InventoryAdjustSchema = z.object({
-  quantity: z.number().int().positive().max(100000),
+  // For RESTOCK: positive quantity; For ADJUSTMENT: can be negative or positive (no zero)
+  quantity: z.number().int().min(-100000).max(100000).refine((q) => q !== 0, { message: "quantity must be non-zero" }),
   type: z.enum(["RESTOCK", "ADJUSTMENT"]),
   note: z.string().max(500).optional(),
 })

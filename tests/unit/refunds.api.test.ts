@@ -4,7 +4,7 @@ import { POST as refundsPost, GET as refundsGet } from "../../app/api/orders/[id
 import { POST as refundFullPost } from "../../app/api/orders/[id]/refund/route"
 
 // Mock auth to return ADMIN role
-vi.mock("../../auth", () => ({
+vi.mock("@/auth", () => ({
   auth: async () => ({ user: { id: "u_admin", role: "ADMIN", email: "admin@test.local" } }),
 }))
 

@@ -108,6 +108,7 @@
     "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
     "@playwright/test": "^1.47.2",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "vite-tsconfig-paths": "^4.3.2"
   }
 }

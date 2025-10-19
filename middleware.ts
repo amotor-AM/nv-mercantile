@@ -15,7 +15,7 @@ export default auth((req) => {
       path: "/",
       httpOnly: false, // must be readable by client to send as header
       sameSite: "lax",
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
     })
   }
 

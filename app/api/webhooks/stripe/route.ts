@@ -25,7 +25,7 @@ async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
 
     const product = await prisma.product.findUnique({ where: { id: it.productId } })
     if (product) {
-      if (product.stockLevel - it.quantity <= 0) {
+      if (product.stockLevel <= 0) {
         await prisma.product.update({ where: { id: it.productId }, data: { inStock: false } })
       }
     }
