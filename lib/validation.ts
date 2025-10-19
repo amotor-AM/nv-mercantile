@@ -81,3 +81,21 @@ export const RmaStartSchema = z.object({
 export const RmaReceiveSchema = z.object({
   received: z.array(z.object({ returnItemId: z.string(), qty: z.number().int().min(0).max(1000) })).min(1),
 })
+
+export const CreateShipmentSchema = z.object({
+  items: z.array(z.object({ orderItemId: z.string(), quantity: z.number().int().positive().max(1000) })).min(1),
+  parcel: z
+    .object({
+      weightOz: z.number().positive().optional(),
+      weightGrams: z.number().positive().optional(),
+      length: z.number().positive().optional(),
+      width: z.number().positive().optional(),
+      height: z.number().positive().optional(),
+      distanceUnit: z.enum(["in", "cm"]).optional(),
+    })
+    .partial()
+    .optional(),
+  carrier: z.string().max(64).optional(),
+  service: z.string().max(128).optional(),
+  purchaseLabel: z.boolean().optional(),
+})

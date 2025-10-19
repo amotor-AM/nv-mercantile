@@ -16,7 +16,7 @@ async function getOrders() {
       ],
     },
     orderBy: { createdAt: "desc" },
-    include: { items: { include: { product: true } } },
+    include: { items: { include: { product: { include: { category: true } } } } },
   })
   return orders
 }
@@ -52,7 +52,7 @@ export default async function OrdersPage() {
             <TableBody>
               {orders.map((o: any) => (
                 <TableRow key={o.id}>
-                  <TableCell>{o.orderNumber}</TableCell>
+                  <TableCell><Link href={`/account/orders/${o.id}`} className="underline">{o.orderNumber}</Link></TableCell>
                   <TableCell>{new Date(o.createdAt).toLocaleDateString()}</TableCell>
                   <TableCell className="capitalize">
                     {o.status.toLowerCase()}

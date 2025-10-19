@@ -116,31 +116,39 @@ export default function AdminDashboard() {
                   <TableCell>${(o.total / 100).toFixed(2)}</TableCell>
                   <TableCell>{new Date(o.updatedAt).toLocaleString()}</TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <Input
-                        placeholder="Carrier"
-                        defaultValue={o.trackingCarrier ?? ""}
-                        onBlur={(e) => updateStatus(o.id, o.status, { trackingCarrier: e.target.value })}
-                      />
-                      <Input
-                        placeholder="Tracking number"
-                        defaultValue={o.trackingNumber ?? ""}
-                        onBlur={(e) => updateStatus(o.id, o.status, { trackingNumber: e.target.value })}
-                      />
-                      <Input
-                        placeholder="Tracking URL"
-                        defaultValue={o.trackingUrl ?? ""}
-                        onBlur={(e) => updateStatus(o.id, o.status, { trackingUrl: e.target.value })}
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={updating === o.id}
-                          onClick={() => updateStatus(o.id, "FULFILLED", { shippedAt: new Date().toISOString() })}
-                        >
-                          Mark shipped
-                        </Button>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/admin/orders/${o.id}/shipments`}>
+                          <Button variant="outline" size="sm">Manage shipments</Button>
+                        </Link>
+                        <span className="text-xs text-muted-foreground">Labels, tracking, pickups</span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Input
+                          placeholder="Carrier"
+                          defaultValue={o.trackingCarrier ?? ""}
+                          onBlur={(e) => updateStatus(o.id, o.status, { trackingCarrier: e.target.value })}
+                        />
+                        <Input
+                          placeholder="Tracking number"
+                          defaultValue={o.trackingNumber ?? ""}
+                          onBlur={(e) => updateStatus(o.id, o.status, { trackingNumber: e.target.value })}
+                        />
+                        <Input
+                          placeholder="Tracking URL"
+                          defaultValue={o.trackingUrl ?? ""}
+                          onBlur={(e) => updateStatus(o.id, o.status, { trackingUrl: e.target.value })}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={updating === o.id}
+                            onClick={() => updateStatus(o.id, "FULFILLED", { shippedAt: new Date().toISOString() })}
+                          >
+                            Mark shipped
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </TableCell>

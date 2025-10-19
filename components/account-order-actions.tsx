@@ -15,7 +15,7 @@ export function AccountOrderActions({ order }: { order: any }) {
       add({
         id: p.slug,
         name: p.name,
-        category: p.category,
+        category: p?.category?.slug || p?.category?.name || "",
         price: it.price / 100,
         image: p.image,
         material: p.material,

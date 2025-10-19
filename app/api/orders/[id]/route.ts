@@ -7,7 +7,19 @@ import { getClientIp, logAdminAction } from "@/lib/security"
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
-  const order = await prisma.order.findUnique({ where: { id: params.id }, include: { items: true } })
+  const order = await prisma.order.findUnique({
+    where: { id: params.id },
+    include: {
+      items: true,
+      shipments: {
+        include: {
+          items: { include: { orderItem: { include: { product: true } } } },
+          events: { orderBy: { occurredAt: "asc" } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  })
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   const role = (session as any)?.user?.role

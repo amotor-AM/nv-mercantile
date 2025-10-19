@@ -98,6 +98,7 @@ model Order {
   items           OrderItem[]
   refunds         Refund[]
   rmas            ReturnRequest[]
+  shipments       Shipment[]
   shippingName    String?
   shippingPhone   String?
   shippingAddress String?
@@ -166,6 +167,59 @@ model ReturnItem {
   orderItemId  String
   requestedQty Int
   receivedQty  Int           @default(0)
+}
+
+model Shipment {
+  id                 String            @id @default(cuid())
+  order              Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId            String
+  carrier            String?
+  service            String?
+  trackingNumber     String?
+  trackingUrl        String?
+  status             ShipmentStatus    @default(CREATED)
+  labelUrl           String?
+  labelCost          Int?
+  labelCurrency      String?           @default("usd")
+  provider           ShippingProvider  @default(MOCK)
+  providerShipmentId String?
+  rawEvents          Json?
+  shippedAt          DateTime?
+  deliveredAt        DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  items              ShipmentItem[]
+  events             ShipmentEvent[]
+
+  @@index([orderId])
+  @@index([status])
+  @@unique([trackingNumber])
+}
+
+model ShipmentItem {
+  id           String     @id @default(cuid())
+  shipment     Shipment   @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId   String
+  orderItem    OrderItem  @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  orderItemId  String
+  quantity     Int
+
+  @@index([shipmentId])
+  @@index([orderItemId])
+}
+
+model ShipmentEvent {
+  id         String         @id @default(cuid())
+  shipment   Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String
+  status     ShipmentStatus?
+  description String?
+  location   String?
+  occurredAt DateTime
+  raw        Json?
+
+  @@index([shipmentId, occurredAt])
 }
 
 model SupportTicket {
@@ -343,4 +397,22 @@ enum RmaStatus {
   IN_TRANSIT
   RECEIVED
   REFUNDED
+}
+
+enum ShipmentStatus {
+  CREATED
+  LABEL_PURCHASED
+  PRE_TRANSIT
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  EXCEPTION
+  CANCELLED
+}
+
+enum ShippingProvider {
+  SHIPPO
+  EASYPOST
+  AFTERSHIP
+  MOCK
 }
