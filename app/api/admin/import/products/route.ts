@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { parse } from "csv-parse/sync"
 import { logAdminAction, getClientIp } from "@/lib/security"
-import { recomputeInStock } from "@/lib/inventory"
+import { recomputeInStock, recomputeProductInStock } from "@/lib/inventory"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -52,11 +52,13 @@ export async function POST(req: NextRequest) {
       applications: [],
       categoryId,
     }
-    await prisma.product.upsert({
+    const prod = await prisma.product.upsert({
       where: { slug },
       create: data,
       update: data,
     })
+    // Recompute product inStock from aggregate variant + product stock
+    await recomputeProductInStock(prisma, prod.id)
     updated++
   }
 

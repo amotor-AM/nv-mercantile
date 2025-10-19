@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { ProductUpdateSchema } from "@/lib/validation"
 import { getClientIp, logAdminAction } from "@/lib/security"
-import { recomputeInStock } from "@/lib/inventory"
+import { recomputeInStock, recomputeProductInStock } from "@/lib/inventory"
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -30,6 +30,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const updated = await prisma.product.update({ where: { id: params.id }, data })
+
+  // If stockLevel changed, recompute product inStock aggregating variants too
+  if (Object.prototype.hasOwnProperty.call(parsed.data, "stockLevel")) {
+    await recomputeProductInStock(prisma, params.id)
+  }
+
   await logAdminAction({
     userId: session?.user?.id ?? null,
     action: "product.update",

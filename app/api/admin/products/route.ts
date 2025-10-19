@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { ProductCreateSchema } from "@/lib/validation"
 import { getClientIp, logAdminAction } from "@/lib/security"
-import { recomputeInStock } from "@/lib/inventory"
+import { recomputeInStock, recomputeProductInStock } from "@/lib/inventory"
 
 export async function GET() {
   const session = await auth()
@@ -74,6 +74,9 @@ export async function POST(req: NextRequest) {
       categoryId: categoryId ?? undefined,
     },
   })
+
+  // Recompute product inStock aggregating variants (no-op if none yet)
+  await recomputeProductInStock(prisma, created.id)
 
   await logAdminAction({
     userId: session?.user?.id ?? null,

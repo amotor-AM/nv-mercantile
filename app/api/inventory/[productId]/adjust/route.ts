@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { InventoryAdjustSchema } from "@/lib/validation"
 import { getClientIp, logAdminAction } from "@/lib/security"
-import { nextStockState } from "@/lib/inventory"
+import { nextStockState, recomputeProductInStock } from "@/lib/inventory"
 
 export async function POST(req: NextRequest, { params }: { params: { productId: string } }) {
   const session = await auth()
@@ -29,24 +29,29 @@ export async function POST(req: NextRequest, { params }: { params: { productId: 
     delta = Math.abs(quantity)
   }
 
-  const { inStock } = nextStockState(product.stockLevel ?? 0, delta)
-
-  const updated = await prisma.product.update({
-    where: { id: product.id },
-    data: {
-      stockLevel: { increment: delta },
-      inStock,
-    },
-  })
-
-  await prisma.inventoryMovement.create({
-    data: {
-      productId: product.id,
-      type,
-      quantity: delta,
-      note,
-    },
-  })
+  // Atomic transaction with serializable isolation to avoid race conditions
+  const updated = await prisma.$transaction(async (tx) => {
+    const fresh = await tx.product.findUnique({ where: { id: product.id }, select: { stockLevel: true } })
+    const { stockLevel } = nextStockState(fresh?.stockLevel ?? 0, delta)
+    const upd = await tx.product.update({
+      where: { id: product.id },
+      data: {
+        stockLevel,
+      },
+    })
+    await tx.inventoryMovement.create({
+      data: {
+        productId: product.id,
+        type,
+        quantity: delta,
+        note,
+      },
+    })
+    // Recompute inStock from product stock and variant aggregates
+    await recomputeProductInStock(tx, product.id)
+    // Return product after recompute
+    return tx.product.findUnique({ where: { id: product.id } })
+  }, { isolationLevel: "Serializable" } as any)
 
   await logAdminAction({
     userId: session?.user?.id ?? null,

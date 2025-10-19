@@ -90,6 +90,8 @@ export async function POST(req: NextRequest) {
 
   const total = orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
+  const normalizedCountry = normalizeCountryCode(shipping?.country) || shipping?.country || "US"
+
   const order = await prisma.order.create({
     data: {
       orderNumber: "NV-" + Date.now().toString(36).toUpperCase(),
@@ -107,7 +109,7 @@ export async function POST(req: NextRequest) {
       shippingCity: shipping?.city,
       shippingState: shipping?.state,
       shippingPostalCode: shipping?.postalCode,
-      shippingCountry: shipping?.country,
+      shippingCountry: normalizedCountry,
       shippingLat: shipping?.lat,
       shippingLng: shipping?.lng,
     },

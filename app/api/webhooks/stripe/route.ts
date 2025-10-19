@@ -5,7 +5,7 @@ import { sendOrderConfirmationEmail } from "@/lib/email"
 import { incCounter } from "@/lib/metrics"
 import { getClientIp, logAdminAction } from "@/lib/security"
 
-import { nextStockState } from "@/lib/inventory"
+import { nextStockState, recomputeProductInStock } from "@/lib/inventory"
 
 async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
   // Update order and decrement stock from items
@@ -19,12 +19,11 @@ async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
   for (const it of order.items) {
     const product = await prisma.product.findUnique({ where: { id: it.productId } })
     if (!product) continue
-    const { stockLevel, inStock } = nextStockState(product.stockLevel ?? 0, -Math.abs(it.quantity))
+    const { stockLevel } = nextStockState(product.stockLevel ?? 0, -Math.abs(it.quantity))
     await prisma.product.update({
       where: { id: it.productId },
       data: {
         stockLevel, // set explicitly to avoid multiple writes
-        inStock,
       },
     })
 
@@ -36,6 +35,8 @@ async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
         note: `Order ${order.orderNumber}`,
       },
     })
+
+    await recomputeProductInStock(prisma, it.productId)
   }
 
   // Metrics: count successful payments

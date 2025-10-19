@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { getClientIp, logAdminAction } from "@/lib/security"
+import { recomputeProductInStock } from "@/lib/inventory"
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -32,6 +33,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const v = await prisma.variant.update({ where: { id: params.id }, data })
 
+  // If stockLevel changed, recompute parent product inStock based on variants aggregate
+  if (Object.prototype.hasOwnProperty.call(data, "stockLevel")) {
+    await recomputeProductInStock(prisma, v.productId)
+  }
+
   await logAdminAction({
     userId: (session as any)?.user?.id ?? null,
     action: "variant.update",
@@ -51,7 +57,12 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!["ADMIN","MANAGER"].includes(role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+  // Fetch variant to get productId for recompute after delete
+  const v = await prisma.variant.findUnique({ where: { id: params.id }, select: { productId: true } })
   await prisma.variant.delete({ where: { id: params.id } })
+  if (v) {
+    await recomputeProductInStock(prisma, v.productId)
+  }
 
   await logAdminAction({
     userId: (session as any)?.user?.id ?? null,
