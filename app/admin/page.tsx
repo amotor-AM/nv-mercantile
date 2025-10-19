@@ -104,7 +104,9 @@ export default function AdminDashboard() {
               {orders?.map((o: any) => (
                 <TableRow key={o.id}>
                   <TableCell>
-                    <div className="font-medium">{o.orderNumber}</div>
+                    <div className="font-medium">
+                      <Link href={`/admin/orders/${o.id}`}>{o.orderNumber}</Link>
+                    </div>
                     <div className="flex gap-2">
                       <a className="text-xs underline" href={`/api/orders/${o.id}/invoice.pdf`} target="_blank" rel="noopener noreferrer">Invoice PDF</a>
                       <a className="text-xs underline" href={`/api/orders/${o.id}/packing-slip.pdf`} target="_blank" rel="noopener noreferrer">Packing Slip</a>
@@ -181,6 +183,9 @@ export default function AdminDashboard() {
                       >
                         Refund
                       </Button>
+                      <Link href={`/admin/orders/${o.id}`}>
+                        <Button variant="outline" size="sm">Details</Button>
+                      </Link>
                     </div>
                   </TableCell>
                 </TableRow>
