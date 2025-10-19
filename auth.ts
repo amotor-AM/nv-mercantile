@@ -13,6 +13,7 @@ export const {
   signOut,
 } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || "",
   session: {
     strategy: "database",
   },
@@ -20,12 +21,10 @@ export const {
     GitHub({
       clientId: process.env.GITHUB_ID || "",
       clientSecret: process.env.GITHUB_SECRET || "",
-      allowDangerousEmailAccountLinking: true,
     }),
     Google({
       clientId: process.env.GOOGLE_ID || "",
       clientSecret: process.env.GOOGLE_SECRET || "",
-      allowDangerousEmailAccountLinking: true,
     }),
     Email({
       async sendVerificationRequest(params) {
@@ -39,6 +38,13 @@ export const {
       if (session.user) {
         ;(session.user as any).id = user.id
         ;(session.user as any).role = (user as any).role ?? "CUSTOMER"
+        ;(session.user as any).twoFactorEnabled = !!(user as any).twoFactorEnabled
+        try {
+          const count = await prisma.webAuthnCredential.count({ where: { userId: user.id } })
+          ;(session.user as any).webauthnEnabled = count > 0
+        } catch {
+          ;(session.user as any).webauthnEnabled = false
+        }
       }
       return session
     },

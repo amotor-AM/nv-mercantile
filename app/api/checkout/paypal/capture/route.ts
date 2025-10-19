@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import paypal from "@paypal/checkout-server-sdk"
 import { prisma } from "@/lib/db"
+import { incCounter } from "@/lib/metrics"
+import { computeBoundedStockLevel, recomputeProductInStock } from "@/lib/inventory"
+import { sendOrderConfirmationEmail } from "@/lib/email"
 
 function getPayPalClient() {
   const env = process.env.PAYPAL_ENV || "sandbox"
@@ -29,12 +32,48 @@ export async function GET(req: NextRequest) {
   // Attempt to locate order by custom_id from original create request
   const purchase = (response.result.purchase_units || [])[0]
   const customId = purchase?.custom_id
+  const captureId = (response.result?.purchase_units?.[0]?.payments?.captures?.[0]?.id) || response.result?.id
   if (customId) {
-    await prisma.order.update({
-      where: { id: customId },
-      data: { status: "PAID", paymentProvider: "paypal" },
-    })
-  }
+    const allowBackorder = (process.env.ALLOW_BACKORDER || "false").toLowerCase() === "true"
 
-  return NextResponse.json({ ok: true })
-}
+    const existing = await prisma.order.findUnique({ where: { id: customId }, include: { items: true } })
+    if (!existing) return NextResponse.json({ error: "Order not found" }, { status: 404 })
+
+    // Idempotency guard using paymentProcessedId
+    if (existing.paymentProcessedId) {
+      return NextResponse.json({ ok: true })
+    }
+
+    const order = await prisma.order.update({
+      where: { id: customId },
+      data: { status: "PAID", paymentProvider: "paypal", paymentProcessedId: String(captureId || ""), paidAt: new Date() },
+      include: { items: true },
+    })
+
+    for (const it of order.items) {
+      const product = await prisma.product.findUnique({ where: { id: it.productId } })
+      if (!product) continue
+
+      const nextLevel = computeBoundedStockLevel(product.stockLevel ?? 0, -Math.abs(it.quantity), allowBackorder)
+      await prisma.product.update({
+        where: { id: it.productId },
+        data: { stockLevel: nextLevel },
+      })
+
+      await prisma.inventoryMovement.create({
+        data: {
+          productId: it.productId,
+          type: "SALE",
+          quantity: -Math.abs(it.quantity),
+          note: `Order ${order.orderNumber}`,
+        },
+      })
+
+      await recomputeProductInStock(prisma, it.productId)
+    }
+
+    await incCounter("payment_success")
+    try {
+      await sendOrderConfirmationEmail(customId)
+    } catch {}
+  }

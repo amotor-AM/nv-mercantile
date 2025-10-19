@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import useSWR from "swr"
 import Link from "next/link"
 import { Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,15 +9,12 @@ import { SearchBar } from "@/components/molecules/search-bar"
 import { NavigationLink } from "@/components/molecules/navigation-link"
 import { CartIcon } from "@/components/cart-icon"
 
-const navigationItems = [
-  { href: "/machined-parts", label: "Machined Parts" },
-  { href: "/metalwork", label: "Metalwork" },
-  { href: "/3d-prints", label: "3D Prints" },
-  { href: "/custom-orders", label: "Custom Orders" },
-]
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const { data: navItems } = useSWR("/api/navigation?location=HEADER", fetcher)
+  const navigationItems = (navItems ?? []) as Array<{ id: string; url: string; label: string }>
 
   return (
     <header className="sticky top-0 z-50 bg-background border-b border-border">
@@ -31,7 +29,7 @@ export function Header() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             {navigationItems.map((item) => (
-              <NavigationLink key={item.href} href={item.href}>
+              <NavigationLink key={item.id} href={item.url}>
                 {item.label}
               </NavigationLink>
             ))}
@@ -64,7 +62,7 @@ export function Header() {
           <div className="md:hidden border-t border-border py-4">
             <nav className="flex flex-col space-y-4">
               {navigationItems.map((item) => (
-                <NavigationLink key={item.href} href={item.href}>
+                <NavigationLink key={item.id} href={item.url}>
                   {item.label}
                 </NavigationLink>
               ))}

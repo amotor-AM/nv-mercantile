@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
+import { recomputeProductInStock } from "@/lib/inventory"
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -32,5 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       stockLevel: Number(stockLevel ?? 0),
     },
   })
+  // Recompute product inStock based on aggregate variant + product stock
+  await recomputeProductInStock(prisma, params.id)
   return NextResponse.json(v, { status: 201 })
 }

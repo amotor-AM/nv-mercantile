@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
       { name: { contains: q, mode: "insensitive" } },
       { subtitle: { contains: q, mode: "insensitive" } },
       { material: { contains: q, mode: "insensitive" } },
-      { category: { contains: q, mode: "insensitive" } },
+      { category: { is: { name: { contains: q, mode: "insensitive" } } } },
+      { category: { is: { slug: { contains: q, mode: "insensitive" } } } },
     ]
   }
   if (lowStockOnly) {
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
     where,
     orderBy: { name: "asc" },
     take: 500,
+    include: { category: true },
   })
 
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
@@ -64,7 +66,7 @@ export async function GET(req: NextRequest) {
       forecastLead,
       recommendedReorder,
       material: p.material,
-      category: p.category,
+      category: p.category?.slug ?? null,
     }
   })
 

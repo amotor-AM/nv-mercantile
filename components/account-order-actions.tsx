@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/lib/cart-store"
 import { useRouter } from "next/navigation"
+import { csrfHeader } from "@/lib/csrf"
 
 export function AccountOrderActions({ order }: { order: any }) {
   const router = useRouter()
@@ -14,7 +15,7 @@ export function AccountOrderActions({ order }: { order: any }) {
       add({
         id: p.slug,
         name: p.name,
-        category: p.category,
+        category: p?.category?.slug || p?.category?.name || "",
         price: it.price / 100,
         image: p.image,
         material: p.material,
@@ -25,7 +26,7 @@ export function AccountOrderActions({ order }: { order: any }) {
   }
 
   const requestRefund = async () => {
-    await fetch(`/api/orders/${order.id}/request-refund`, { method: "POST" })
+    await fetch(`/api/orders/${order.id}/request-refund`, { method: "POST", headers: { ...csrfHeader() } })
     router.refresh()
   }
 

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
+import { csrfHeader } from "@/lib/csrf"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -24,7 +25,7 @@ export default function SupportAdmin() {
     if (!activeId || !reply.trim()) return
     await fetch(`/api/support/${activeId}/messages`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ body: reply, status: "PENDING" }),
     })
     setReply("")

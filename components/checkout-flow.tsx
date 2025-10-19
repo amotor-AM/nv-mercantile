@@ -13,15 +13,90 @@ import { useRouter } from "next/navigation"
 import { Elements, PaymentElement, useElements, useStripe, PaymentRequestButtonElement } from "@stripe/react-stripe-js"
 import { stripePromise } from "@/lib/stripe-client"
 import { track } from "@vercel/analytics"
+import { csrfHeader } from "@/lib/csrf"
+import Image from "next/image"
+import { normalizeCountryCode } from "@/lib/utils"
 
 interface CheckoutFormData {
   email: string
   firstName: string
   lastName: string
-  address: string
+  addressLine1: string
+  addressLine2: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+  lat?: number
+  lng?: number
   phoneNumber: string
   paymentMethod: string
   saveInfo: boolean
+}
+
+function useGooglePlacesAutocomplete(setFormData: (updater: (prev: CheckoutFormData) => CheckoutFormData) => void) {
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    if (!apiKey) return
+
+    function injectScript() {
+      return new Promise<void>((resolve, reject) => {
+        if (typeof window !== "undefined" && (window as any).google?.maps?.places) {
+          resolve()
+          return
+        }
+        const script = document.createElement("script")
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+        script.async = true
+        script.onload = () => resolve()
+        script.onerror = (e) => reject(e)
+        document.head.appendChild(script)
+      })
+    }
+
+    let autocomplete: any
+    injectScript()
+      .then(() => {
+        const input = document.getElementById("addressLine1") as HTMLInputElement | null
+        if (!input || !(window as any).google?.maps?.places) return
+        const places = (window as any).google.maps.places
+        autocomplete = new places.Autocomplete(input, {
+          types: ["address"],
+          fields: ["address_components", "geometry"],
+        })
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace()
+          if (!place) return
+          const comps = place.address_components || []
+          const getComp = (type: string) => comps.find((c: any) => c.types.includes(type))
+          const streetNumber = getComp("street_number")?.short_name || ""
+          const route = getComp("route")?.short_name || ""
+          const locality = getComp("locality")?.short_name || getComp("postal_town")?.short_name || ""
+          const admin1 = getComp("administrative_area_level_1")?.short_name || ""
+          const postal = getComp("postal_code")?.short_name || ""
+          const country = getComp("country")?.short_name || "US"
+          const geometry = place.geometry
+
+          setFormData((prev) => ({
+            ...prev,
+            addressLine1: [streetNumber, route].filter(Boolean).join(" "),
+            city: locality,
+            state: admin1,
+            postalCode: postal,
+            country,
+            lat: geometry?.location?.lat() ?? prev.lat,
+            lng: geometry?.location?.lng() ?? prev.lng,
+          }))
+        })
+      })
+      .catch(() => {
+        // ignore script load errors
+      })
+
+    return () => {
+      // no cleanup needed for Google Autocomplete
+    }
+  }, [setFormData])
 }
 
 function StripePaymentSection({ clientSecret }: { clientSecret: string | null }) {
@@ -39,11 +114,15 @@ function PaymentRequestExpress({
   clientSecret,
   orderId,
   amount,
+  country,
+  currency,
   onSuccess,
 }: {
   clientSecret: string
   orderId: string
   amount: number // cents
+  country: string // ISO 3166-1 alpha-2
+  currency: string // ISO currency code (e.g., "usd")
   onSuccess: () => void
 }) {
   const stripe = useStripe()
@@ -55,8 +134,8 @@ function PaymentRequestExpress({
     async function init() {
       if (!stripe || !clientSecret) return
       const pr = stripe.paymentRequest({
-        country: "US",
-        currency: "usd",
+        country,
+        currency,
         total: { label: "NV Mercantile", amount },
         requestPayerEmail: true,
         requestPayerName: true,
@@ -65,10 +144,13 @@ function PaymentRequestExpress({
       if (result && mounted) {
         pr.on("paymentmethod", async (ev: any) => {
           try {
-            // confirm payment using provided method
-            const { error } = await stripe.confirmCardPayment(clientSecret, {
-              payment_method: ev.paymentMethod.id,
-            }, { handleActions: true })
+            const { error } = await stripe.confirmCardPayment(
+              clientSecret,
+              {
+                payment_method: ev.paymentMethod.id,
+              },
+              { handleActions: true }
+            )
             if (error) {
               ev.complete("fail")
               return
@@ -87,7 +169,7 @@ function PaymentRequestExpress({
     return () => {
       mounted = false
     }
-  }, [stripe, clientSecret, amount, onSuccess])
+  }, [stripe, clientSecret, amount, country, currency, onSuccess])
 
   if (!ready || !paymentRequest) return null
 
@@ -101,11 +183,6 @@ function PaymentRequestExpress({
 
 function StripeReviewAndPlaceOrder(props: {
   orderId: string | null
-  email: string
-  firstName: string
-  lastName: string
-  address: string
-  phoneNumber: string
   isProcessing: boolean
   onProcessing: (v: boolean) => void
   onSuccess: () => void
@@ -126,7 +203,7 @@ function StripeReviewAndPlaceOrder(props: {
         </div>
 
         {errorMessage && (
-          <div className="text-sm text-destructive">
+          <div className="text-sm text-destructive" aria-live="polite">
             {errorMessage}
           </div>
         )}
@@ -161,6 +238,7 @@ function StripeReviewAndPlaceOrder(props: {
           }}
           disabled={isProcessing || !stripe || !elements}
           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300"
+          type="button"
         >
           {isProcessing ? "Processing..." : "Place Order"}
         </Button>
@@ -178,11 +256,17 @@ export function CheckoutFlow() {
     email: "",
     firstName: "",
     lastName: "",
-    address: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "US",
     phoneNumber: "",
     paymentMethod: "stripe",
     saveInfo: false,
   })
+  useGooglePlacesAutocomplete((updater) => setFormData((prev) => updater(prev)))
 
   const [orderId, setOrderId] = useState<string | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
@@ -221,11 +305,13 @@ export function CheckoutFlow() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  const isEmailValid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  const normalizedCountry = normalizeCountryCode(formData.country)
+
   const createOrderAndPaymentIntent = async () => {
-    // Create the order
     const orderRes = await fetch("/api/orders", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({
         email: formData.email,
         items: items.map((i) => ({
@@ -237,7 +323,14 @@ export function CheckoutFlow() {
         shipping: {
           name: `${formData.firstName} ${formData.lastName}`,
           phone: formData.phoneNumber,
-          address: formData.address,
+          addressLine1: formData.addressLine1,
+          addressLine2: formData.addressLine2,
+          city: formData.city,
+          state: formData.state,
+          postalCode: formData.postalCode,
+          country: normalizedCountry || formData.country,
+          lat: formData.lat,
+          lng: formData.lng,
         },
       }),
     })
@@ -246,15 +339,22 @@ export function CheckoutFlow() {
     setOrderId(order.id)
     track("create_order", { orderId: order.id, value: order.total / 100, currency: order.currency })
 
-    // Create or update a PaymentIntent for Stripe
-    const piRes = await fetch("/api/checkout/stripe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId: order.id }),
-    })
-    if (!piRes.ok) throw new Error("Failed to initialize payment")
-    const { clientSecret } = await piRes.json()
-    setClientSecret(clientSecret)
+    // Create or update a PaymentIntent for Stripe (optional)
+    try {
+      const piRes = await fetch("/api/checkout/stripe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        body: JSON.stringify({ orderId: order.id }),
+      })
+      if (piRes.ok) {
+        const { clientSecret } = await piRes.json()
+        setClientSecret(clientSecret)
+      } else {
+        setClientSecret(null)
+      }
+    } catch {
+      setClientSecret(null)
+    }
 
     try {
       window.localStorage.setItem("nv-mercantile-email", formData.email)
@@ -265,6 +365,15 @@ export function CheckoutFlow() {
     if (step === 1) {
       setIsProcessing(true)
       try {
+        if (!isEmailValid(formData.email)) {
+          throw new Error("Please enter a valid email address.")
+        }
+        if (!formData.firstName || !formData.lastName) {
+          throw new Error("Please enter your name.")
+        }
+        if (!formData.addressLine1 || !formData.city || !formData.state || !formData.postalCode) {
+          throw new Error("Please complete your shipping address.")
+        }
         await createOrderAndPaymentIntent()
         track("add_shipping_info", { orderId, email: formData.email })
         setCurrentStep(2)
@@ -289,24 +398,19 @@ export function CheckoutFlow() {
     <div className="max-w-7xl mx-auto px-4 py-8 min-h-[80vh]">
       {/* Progress Steps */}
       <div className="flex items-center justify-center mb-12">
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-4" role="group" aria-label="Checkout progress">
           {[1, 2, 3].map((step) => (
             <div key={step} className="flex items-center">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  currentStep >= step
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-gray-200 text-gray-600"
+                  currentStep >= step ? "bg-primary text-primary-foreground" : "bg-gray-200 text-gray-600"
                 }`}
+                aria-current={currentStep === step ? "step" : undefined}
               >
                 {step}
               </div>
               {step < 3 && (
-                <div
-                  className={`w-16 h-1 mx-2 ${
-                    currentStep > step ? "bg-primary" : "bg-gray-200"
-                  }`}
-                />
+                <div className={`w-16 h-1 mx-2 ${currentStep > step ? "bg-primary" : "bg-gray-200"}`} aria-hidden="true" />
               )}
             </div>
           ))}
@@ -329,7 +433,14 @@ export function CheckoutFlow() {
                     value={formData.firstName}
                     onChange={(e) => handleInputChange("firstName", e.target.value)}
                     placeholder="First Name"
+                    aria-invalid={!formData.firstName ? true : undefined}
+                    aria-describedby="firstName-error"
                   />
+                  {!formData.firstName && (
+                    <p id="firstName-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                      Please enter your first name.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="lastName">Last Name</Label>
@@ -338,7 +449,14 @@ export function CheckoutFlow() {
                     value={formData.lastName}
                     onChange={(e) => handleInputChange("lastName", e.target.value)}
                     placeholder="Last Name"
+                    aria-invalid={!formData.lastName ? true : undefined}
+                    aria-describedby="lastName-error"
                   />
+                  {!formData.lastName && (
+                    <p id="lastName-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                      Please enter your last name.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -350,7 +468,14 @@ export function CheckoutFlow() {
                   value={formData.email}
                   onChange={(e) => handleInputChange("email", e.target.value)}
                   placeholder="Email"
+                  aria-invalid={!formData.email || !isEmailValid(formData.email) ? true : undefined}
+                  aria-describedby="email-error"
                 />
+                {!isEmailValid(formData.email) && formData.email && (
+                  <p id="email-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                    Please enter a valid email address.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -360,23 +485,120 @@ export function CheckoutFlow() {
                   value={formData.phoneNumber}
                   onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
                   placeholder="Phone Number"
+                  aria-invalid={!formData.phoneNumber ? true : undefined}
                 />
               </div>
 
-              <div>
-                <Label htmlFor="address">Shipping Address</Label>
-                <Input
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => handleInputChange("address", e.target.value)}
-                  placeholder="Full Address"
-                />
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <Label htmlFor="addressLine1">Address Line 1</Label>
+                  <Input
+                    id="addressLine1"
+                    value={formData.addressLine1}
+                    onChange={(e) => handleInputChange("addressLine1", e.target.value)}
+                    placeholder="Street address"
+                    aria-invalid={!formData.addressLine1 ? true : undefined}
+                    aria-describedby="addressLine1-error"
+                  />
+                  {!formData.addressLine1 && (
+                    <p id="addressLine1-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                      Please enter your street address.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="addressLine2">Address Line 2</Label>
+                  <Input
+                    id="addressLine2"
+                    value={formData.addressLine2}
+                    onChange={(e) => handleInputChange("addressLine2", e.target.value)}
+                    placeholder="Apt, suite, unit (optional)"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => handleInputChange("city", e.target.value)}
+                      aria-invalid={!formData.city ? true : undefined}
+                      aria-describedby="city-error"
+                    />
+                    {!formData.city && (
+                      <p id="city-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                        Please enter your city.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="state">State</Label>
+                    <Input
+                      id="state"
+                      value={formData.state}
+                      onChange={(e) => handleInputChange("state", e.target.value)}
+                      aria-invalid={!formData.state ? true : undefined}
+                      aria-describedby="state-error"
+                    />
+                    {!formData.state && (
+                      <p id="state-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                        Please enter your state or region.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="postalCode">Postal Code</Label>
+                    <Input
+                      id="postalCode"
+                      value={formData.postalCode}
+                      onChange={(e) => handleInputChange("postalCode", e.target.value)}
+                      aria-invalid={!formData.postalCode ? true : undefined}
+                      aria-describedby="postalCode-error"
+                    />
+                    {!formData.postalCode && (
+                      <p id="postalCode-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                        Please enter your postal code.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="country">Country</Label>
+                  <Input
+                    id="country"
+                    value={formData.country}
+                    onChange={(e) => handleInputChange("country", e.target.value)}
+                    onBlur={() => {
+                      const normalized = normalizeCountryCode(formData.country)
+                      if (normalized) {
+                        setFormData((prev) => ({ ...prev, country: normalized }))
+                      }
+                    }}
+                    aria-describedby="country-error"
+                  />
+                  {formData.country && !normalizedCountry && (
+                    <p id="country-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                      Country should be a 2-letter code (e.g., US, GB) or a recognizable country name.
+                    </p>
+                  )}
+                </div>
               </div>
 
               <Button
                 onClick={() => handleStepComplete(1)}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                disabled={isProcessing || !formData.firstName || !formData.lastName || !formData.email || !formData.address}
+                disabled={
+                  isProcessing ||
+                  !formData.firstName ||
+                  !formData.lastName ||
+                  !formData.email ||
+                  !isEmailValid(formData.email) ||
+                  !formData.addressLine1 ||
+                  !formData.city ||
+                  !formData.state ||
+                  !formData.postalCode
+                }
+                type="button"
               >
                 {isProcessing ? "Preparing Payment..." : "Continue to Payment"}
               </Button>
@@ -409,11 +631,12 @@ export function CheckoutFlow() {
 
                       <div className="space-y-3">
                         <Label>Payment Method</Label>
-                        <div className="flex gap-3">
+                        <div className="flex gap-3" role="radiogroup" aria-label="Select payment method">
                           <button
                             className={`px-3 py-2 rounded border ${formData.paymentMethod === "stripe" ? "border-primary" : "border-gray-200"}`}
                             onClick={() => handleInputChange("paymentMethod", "stripe")}
                             type="button"
+                            aria-pressed={formData.paymentMethod === "stripe"}
                           >
                             Stripe (Card)
                           </button>
@@ -421,6 +644,7 @@ export function CheckoutFlow() {
                             className={`px-3 py-2 rounded border ${formData.paymentMethod === "paypal" ? "border-primary" : "border-gray-200"}`}
                             onClick={() => handleInputChange("paymentMethod", "paypal")}
                             type="button"
+                            aria-pressed={formData.paymentMethod === "paypal"}
                           >
                             PayPal
                           </button>
@@ -432,6 +656,8 @@ export function CheckoutFlow() {
                           clientSecret={clientSecret}
                           orderId={orderId}
                           amount={Math.round(total * 100)}
+                          country={normalizedCountry || "US"}
+                          currency={"usd"}
                           onSuccess={() => {
                             clearCart()
                             router.push(`/order-confirmation?order=${orderId}`)
@@ -444,12 +670,13 @@ export function CheckoutFlow() {
                       </div>
 
                       <div className="flex gap-4">
-                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1">
+                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1" type="button">
                           Back
                         </Button>
                         <Button
                           onClick={() => handleStepComplete(2)}
                           className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                          type="button"
                         >
                           Continue to Review
                         </Button>
@@ -459,11 +686,6 @@ export function CheckoutFlow() {
 
                   {currentStep === 3 && (
                     <StripeReviewAndPlaceOrder
-                      email={formData.email}
-                      firstName={formData.firstName}
-                      lastName={formData.lastName}
-                      address={formData.address}
-                      phoneNumber={formData.phoneNumber}
                       orderId={orderId}
                       isProcessing={isProcessing}
                       onProcessing={setIsProcessing}
@@ -478,10 +700,10 @@ export function CheckoutFlow() {
                 // PayPal or Stripe not yet initialized
                 <>
                   {currentStep === 2 && (
-                    <div className="space-y-6">
-                      <h2 className="text-2xl font-medium">Payment Information</h2>
+                   <<div className="space-y-6">
+                     <<h2 className="text-2xl font-medium">Payment Informati</</h2>
 
-                      <div className="space-y-3">
+                      {providerError &&pace-y-3">
                         <Label>Payment Method</Label>
                         <div className="flex gap-3">
                           <button
@@ -506,12 +728,13 @@ export function CheckoutFlow() {
                       </div>
 
                       <div className="flex gap-4">
-                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1">
+                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1" type="button">
                           Back
                         </Button>
                         <Button
                           onClick={() => handleStepComplete(2)}
                           className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                          type="button"
                         >
                           Continue to Review
                         </Button>
@@ -529,10 +752,16 @@ export function CheckoutFlow() {
                           <p className="text-sm text-gray-600">
                             {formData.firstName} {formData.lastName}
                           </p>
-                          <p className="text-sm text-gray-600">{formData.address}</p>
+                          <p className="text-sm text-gray-600">
+                            {formData.addressLine1}
+                            {formData.addressLine2 ? `, ${formData.addressLine2}` : ""}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {formData.city}, {formData.state} {formData.postalCode} {formData.country}
+                          </p>
                           <p className="text-sm text-gray-600">{formData.email}</p>
                           <p className="text-sm text-gray-600">{formData.phoneNumber}</p>
-                          <button className="text-sm text-blue-600 underline mt-2" onClick={() => setCurrentStep(1)}>
+                          <button className="text-sm text-blue-600 underline mt-2" onClick={() => setCurrentStep(1)} type="button">
                             Edit
                           </button>
                         </div>
@@ -541,12 +770,12 @@ export function CheckoutFlow() {
                           <h3 className="font-medium mb-2">Payment Method</h3>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+                              <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center" aria-hidden="true">
                                 <span className="text-sm font-medium">💳</span>
                               </div>
                               <span className="capitalize">{formData.paymentMethod}</span>
                             </div>
-                            <button className="text-sm text-blue-600 underline" onClick={() => setCurrentStep(2)}>
+                            <button className="text-sm text-blue-600 underline" onClick={() => setCurrentStep(2)} type="button">
                               Edit
                             </button>
                           </div>
@@ -564,7 +793,7 @@ export function CheckoutFlow() {
                               // PayPal redirect
                               const p = await fetch("/api/checkout/paypal", {
                                 method: "POST",
-                                headers: { "Content-Type": "application/json" },
+                                headers: { "Content-Type": "application/json", ...csrfHeader() },
                                 body: JSON.stringify({ orderId }),
                               })
                               if (p.ok) {
@@ -586,6 +815,7 @@ export function CheckoutFlow() {
                           }}
                           disabled={isProcessing}
                           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300"
+                          type="button"
                         >
                           {isProcessing ? "Processing..." : "Place Order"}
                         </Button>
@@ -640,10 +870,12 @@ export function CheckoutFlow() {
                 const product = getProductById(item.id)
                 return (
                   <div key={item.id} className="flex gap-4">
-                    <img
+                    <Image
                       src={item.image || "/placeholder.svg"}
                       alt={item.name}
-                      className="w-20 h-20 object-cover rounded"
+                      width={80}
+                      height={80}
+                      className="object-cover rounded"
                     />
                     <div className="flex-1">
                       <h4 className="font-medium text-sm">${item.price.toFixed(2)}</h4>

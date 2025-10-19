@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
+import { InventoryAdjustSchema } from "@/lib/validation"
+import { getClientIp, logAdminAction } from "@/lib/security"
+import { computeBoundedStockLevel, recomputeProductInStock } from "@/lib/inventory"
 
 export async function POST(req: NextRequest, { params }: { params: { productId: string } }) {
   const session = await auth()
@@ -9,15 +12,12 @@ export async function POST(req: NextRequest, { params }: { params: { productId: 
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { quantity, type, note } = (await req.json().catch(() => ({}))) as {
-    quantity?: number
-    type?: "RESTOCK" | "ADJUSTMENT"
-    note?: string
+  const json = await req.json().catch(() => ({}))
+  const parsed = InventoryAdjustSchema.safeParse(json)
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid input" }, { status: 422 })
   }
-
-  if (!quantity || !type) {
-    return NextResponse.json({ error: "quantity and type required" }, { status: 400 })
-  }
+  const { quantity, type, note } = parsed.data
 
   const product = await prisma.product.findUnique({ where: { id: params.productId } })
   if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -29,21 +29,40 @@ export async function POST(req: NextRequest, { params }: { params: { productId: 
     delta = Math.abs(quantity)
   }
 
-  const updated = await prisma.product.update({
-    where: { id: product.id },
-    data: {
-      stockLevel: { increment: delta },
-      inStock: product.inStock || delta > 0 ? true : product.inStock,
-    },
-  })
+  const allowBackorder = (process.env.ALLOW_BACKORDER || "false").toLowerCase() === "true"
 
-  await prisma.inventoryMovement.create({
-    data: {
-      productId: product.id,
-      type,
-      quantity: delta,
-      note,
-    },
+  // Atomic transaction with serializable isolation to avoid race conditions
+  const updated = await prisma.$transaction(async (tx) => {
+    const fresh = await tx.product.findUnique({ where: { id: product.id }, select: { stockLevel: true } })
+    const stockLevel = computeBoundedStockLevel(fresh?.stockLevel ?? 0, delta, allowBackorder)
+    const upd = await tx.product.update({
+      where: { id: product.id },
+      data: {
+        stockLevel,
+      },
+    })
+    await tx.inventoryMovement.create({
+      data: {
+        productId: product.id,
+        type,
+        quantity: delta,
+        note,
+      },
+    })
+    // Recompute inStock from product stock and variant aggregates
+    await recomputeProductInStock(tx, product.id)
+    // Return product after recompute
+    return tx.product.findUnique({ where: { id: product.id } })
+  }, { isolationLevel: "Serializable" } as any)
+
+  await logAdminAction({
+    userId: session?.user?.id ?? null,
+    action: "inventory.adjust",
+    targetType: "Product",
+    targetId: product.id,
+    payload: { quantity, type, note },
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
   })
 
   return NextResponse.json({ ok: true, product: updated })

@@ -1,0 +1,44 @@
+name: Staging Preview
+
+on:
+  pull_request:
+    branches: [ "develop", "staging" ]
+
+jobs:
+  preview-build:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: production
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      DATABASE_PROVIDER: sqlite
+      DATABASE_URL: file:./staging.db
+      NEXTAUTH_SECRET: staging_secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Install deps
+        run: yarn --frozen-lockfile
+
+      - name: Prisma generate and migrate
+        run: |
+          yarn prisma:generate
+          npx prisma migrate deploy
+
+      - name: Seed minimal staging data
+        run: yarn prisma:seed:staging
+
+      - name: Build
+        run: yarn build
+
+      - name: Archive build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: .next

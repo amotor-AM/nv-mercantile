@@ -1,24 +1,67 @@
 name: CI
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
+    branches: [ "**" ]
 
 jobs:
-  build-test:
+  build-and-test:
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      DATABASE_PROVIDER: sqlite
+      DATABASE_URL: file:./ci.db
+      NEXTAUTH_SECRET: test_secret
+      LOG_LEVEL: info
+      SEED_MODE: ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: "yarn"
-      - run: yarn install --frozen-lockfile
-      - run: yarn prisma:generate
-      - run: yarn build
-      - run: yarn test:e2e
+
+      - name: Install dependencies
+        run: yarn --frozen-lockfile
+
+      - name: Prisma generate and migrate
+        run: |
+          yarn prisma:generate
+          npx prisma migrate deploy
+          yarn prisma:seed
+
+      - name: Typecheck
+        run: yarn typecheck
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Unit tests
+        run: yarn test:unit
+
+      - name: Build
+        run: yarn build
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Start server
+        run: |
+          yarn start &
+          npx wait-on http://localhost:3000
+
+      - name: E2E tests
         env:
-          # Provide dummy secrets if needed
-          NEXTAUTH_SECRET: testsecret
-          NEXTAUTH_URL: http://localhost:3000
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+        run: yarn test:e2e
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: coverage

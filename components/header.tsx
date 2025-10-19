@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import useSWR from "swr"
 import Link from "next/link"
 import { Search, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,6 +9,9 @@ import { Input } from "@/components/ui/input"
 import { CartIcon } from "@/components/cart-icon"
 import { useRouter } from "next/navigation"
 import { useSession, signIn, signOut } from "next-auth/react"
+import Image from "next/image"
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -16,6 +20,8 @@ export function Header() {
   const [showSearchResults, setShowSearchResults] = useState(false)
   const router = useRouter()
   const { data: session } = useSession()
+  const { data: navItems } = useSWR("/api/navigation?location=HEADER", fetcher)
+  const items = (navItems ?? []) as Array<{ id: string; label: string; url: string }>
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query)
@@ -49,7 +55,8 @@ export function Header() {
     if (searchQuery.trim()) {
       setShowSearchResults(false)
       setSearchQuery("")
-      router.push(`/machined-parts?q=${encodeURIComponent(searchQuery)}`)
+      const dest = Array.isArray(items) && items.length ? items[0].url : "/"
+      router.push(`${dest}?q=${encodeURIComponent(searchQuery)}`)
     }
   }
 
@@ -75,18 +82,11 @@ export function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/machined-parts" className="font-medium hover:text-primary">
-              Machined Parts
-            </Link>
-            <Link href="/metalwork" className="font-medium hover:text-primary">
-              Metalwork
-            </Link>
-            <Link href="/3d-prints" className="font-medium hover:text-primary">
-              3D Prints
-            </Link>
-            <Link href="/custom-orders" className="font-medium hover:text-primary">
-              Custom Orders
-            </Link>
+            {items.map((it) => (
+              <Link key={it.id} href={it.url} className="font-medium hover:text-primary">
+                {it.label}
+              </Link>
+            ))}
             {session?.user?.role === "ADMIN" && (
               <Link href="/admin" className="font-medium hover:text-primary">
                 Admin
@@ -106,23 +106,27 @@ export function Header() {
                     value={searchQuery}
                     onChange={(e) => handleSearch(e.target.value)}
                     className="border-0 bg-transparent p-0 focus-visible:ring-0 text-sm w-full"
+                    aria-label="Search products"
                   />
                 </div>
                 
                 {/* Search Results Dropdown */}
                 {showSearchResults && searchResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-background border border-border rounded-lg shadow-lg z-50">
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-background border border-border rounded-lg shadow-lg z-50" role="listbox" aria-label="Search results">
                     {searchResults.map((product) => (
                       <button
                         key={product.id}
                         onClick={() => handleProductClick(product.id)}
                         className="w-full p-3 text-left hover:bg-muted transition-colors border-b border-border last:border-b-0"
+                        type="button"
                       >
                         <div className="flex items-center gap-3">
-                          <img 
+                          <Image 
                             src={product.image} 
                             alt={product.name}
-                            className="w-12 h-12 object-cover rounded"
+                            width={48}
+                            height={48}
+                            className="object-cover rounded"
                           />
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">{product.name}</p>
@@ -157,7 +161,7 @@ export function Header() {
             )}
 
             {/* Mobile menu button */}
-            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)} aria-label="Toggle menu">
               {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
           </div>
@@ -167,18 +171,11 @@ export function Header() {
         {isMenuOpen && (
           <div className="md:hidden border-t border-border py-4">
             <nav className="flex flex-col space-y-4">
-              <Link href="/machined-parts" className="font-medium hover:text-primary">
-                Machined Parts
-              </Link>
-              <Link href="/metalwork" className="font-medium hover:text-primary">
-                Metalwork
-              </Link>
-              <Link href="/3d-prints" className="font-medium hover:text-primary">
-                3D Prints
-              </Link>
-              <Link href="/custom-orders" className="font-medium hover:text-primary">
-                Custom Orders
-              </Link>
+              {items.map((it) => (
+                <Link key={it.id} href={it.url} className="font-medium hover:text-primary">
+                  {it.label}
+                </Link>
+              ))}
               <div className="flex items-center bg-muted rounded-full px-4 py-2 mt-4">
                 <Search className="w-4 h-4 text-muted-foreground mr-2" />
                 <Input 
@@ -186,6 +183,7 @@ export function Header() {
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="border-0 bg-transparent p-0 focus-visible:ring-0 text-sm" 
+                  aria-label="Search products"
                 />
               </div>
               <div className="flex items-center gap-3 pt-2">

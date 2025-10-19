@@ -4,6 +4,9 @@ import OrderConfirmationEmail from "@/emails/templates/OrderConfirmationEmail"
 import SignInEmail from "@/emails/templates/SignInEmail"
 import OrderShippedEmail from "@/emails/templates/OrderShippedEmail"
 import RefundProcessedEmail from "@/emails/templates/RefundProcessedEmail"
+import ShipmentOutForDeliveryEmail from "@/emails/templates/ShipmentOutForDeliveryEmail"
+import ShipmentDeliveredEmail from "@/emails/templates/ShipmentDeliveredEmail"
+import ShipmentExceptionEmail from "@/emails/templates/ShipmentExceptionEmail"
 import { prisma } from "./db"
 
 const resendApiKey = process.env.RESEND_API_KEY || ""
@@ -60,6 +63,63 @@ export async function sendOrderShippedEmail(orderId: string, opts?: { trackingUr
     from,
     to: [order.email],
     subject: `Your NV Mercantile Order ${order.orderNumber} has shipped`,
+    html,
+  })
+}
+
+export async function sendShipmentOutForDeliveryEmail(orderId: string, opts?: { trackingUrl?: string; trackingNumber?: string }) {
+  if (!resend) return
+  const order = await prisma.order.findUnique({ where: { id: orderId } })
+  if (!order) return
+  const html = render(
+    ShipmentOutForDeliveryEmail({
+      orderNumber: order.orderNumber,
+      trackingUrl: opts?.trackingUrl,
+      trackingNumber: opts?.trackingNumber,
+    })
+  )
+  await resend.emails.send({
+    from,
+    to: [order.email],
+    subject: `Order ${order.orderNumber} is out for delivery`,
+    html,
+  })
+}
+
+export async function sendShipmentDeliveredEmail(orderId: string, opts?: { trackingUrl?: string; trackingNumber?: string }) {
+  if (!resend) return
+  const order = await prisma.order.findUnique({ where: { id: orderId } })
+  if (!order) return
+  const html = render(
+    ShipmentDeliveredEmail({
+      orderNumber: order.orderNumber,
+      trackingUrl: opts?.trackingUrl,
+      trackingNumber: opts?.trackingNumber,
+    })
+  )
+  await resend.emails.send({
+    from,
+    to: [order.email],
+    subject: `Order ${order.orderNumber} has been delivered`,
+    html,
+  })
+}
+
+export async function sendShipmentExceptionEmail(orderId: string, opts?: { trackingUrl?: string; trackingNumber?: string }) {
+  if (!resend) return
+  const order = await prisma.order.findUnique({ where: { id: orderId } })
+  if (!order) return
+  const html = render(
+    ShipmentExceptionEmail({
+      orderNumber: order.orderNumber,
+      trackingUrl: opts?.trackingUrl,
+      trackingNumber: opts?.trackingNumber,
+    })
+  )
+  await resend.emails.send({
+    from,
+    to: [order.email],
+    subject: `Issue with your Order ${order.orderNumber} shipment`,
     html,
   })
 }
@@ -136,4 +196,10 @@ export async function sendReorderReportEmail(
   const list = rows.map((r) => `<li>${r.name}: reorder ${r.recommendedReorder} (lead ${r.leadTimeDays} days)</li>`).join("")
   const html = `<h3>Reorder Recommendations</h3><ul>${list}</ul>`
   await resend.emails.send({ from, to: [inventoryAlertTo], subject: "Reorder recommendations", html })
+}
+
+export async function sendAlertEmail(to: string, { subject, body }: { subject: string; body: string }) {
+  if (!resend) return
+  const html = `<pre>${body}</pre>`
+  await resend.emails.send({ from, to: [to], subject, html })
 }

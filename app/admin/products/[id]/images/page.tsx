@@ -6,6 +6,7 @@ import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
+import { csrfHeader } from "@/lib/csrf"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -21,12 +22,12 @@ export default function ProductImagesPage() {
     if (file) {
       const fd = new FormData()
       fd.set("file", file)
-      const res = await fetch("/api/admin/uploads", { method: "POST", body: fd })
+      const res = await fetch("/api/admin/uploads", { method: "POST", body: fd, headers: { ...csrfHeader() } })
       if (res.ok) {
         const { url } = await res.json()
         await fetch(`/api/admin/products/${productId}/images`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...csrfHeader() },
           body: JSON.stringify({ url }),
         })
         if (fileRef.current) fileRef.current.value = ""
@@ -35,7 +36,7 @@ export default function ProductImagesPage() {
     } else if (url) {
       await fetch(`/api/admin/products/${productId}/images`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
         body: JSON.stringify({ url }),
       })
       setUrl("")
@@ -44,7 +45,7 @@ export default function ProductImagesPage() {
   }
 
   const remove = async (imageId: string) => {
-    await fetch(`/api/admin/products/images/${imageId}`, { method: "DELETE" })
+    await fetch(`/api/admin/products/images/${imageId}`, { method: "DELETE", headers: { ...csrfHeader() } })
     mutate()
   }
 

@@ -3,6 +3,9 @@ import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
 import Stripe from "stripe"
 import { sendRefundEmail } from "@/lib/email"
+import { RmaReceiveSchema } from "@/lib/validation"
+import { getClientIp, logAdminAction } from "@/lib/security"
+import { nextStockState, recomputeProductInStock } from "@/lib/inventory"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string; rmaId: string } }) {
   const session = await auth()
@@ -10,9 +13,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
   if (!["ADMIN","MANAGER","SUPPORT","WAREHOUSE"].includes(role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  const body = await req.json().catch(() => ({}))
-  const received = body.received as { returnItemId: string; qty: number }[]
-  if (!received?.length) return NextResponse.json({ error: "received required" }, { status: 400 })
+  const json = await req.json().catch(() => ({}))
+  const parsed = RmaReceiveSchema.safeParse(json)
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 422 })
+  const received = parsed.data.received
 
   const rma = await prisma.returnRequest.findUnique({
     where: { id: params.rmaId },
@@ -28,11 +32,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     const qty = Math.min(rec.qty, it.requestedQty)
     await prisma.returnItem.update({ where: { id: it.id }, data: { receivedQty: qty } })
     refundCents += qty * it.orderItem.price
-    // Restock returned quantity (optional)
-    await prisma.product.update({
-      where: { id: it.orderItem.productId },
-      data: { stockLevel: { increment: qty }, inStock: true },
-    })
+    // Restock returned quantity using consistent stock state computation
+    const product = await prisma.product.findUnique({ where: { id: it.orderItem.productId } })
+    if (product) {
+      const { stockLevel } = nextStockState(product.stockLevel ?? 0, qty)
+      await prisma.product.update({
+        where: { id: it.orderItem.productId },
+        data: { stockLevel },
+      })
+      await recomputeProductInStock(prisma, it.orderItem.productId)
+    }
     await prisma.inventoryMovement.create({
       data: { productId: it.orderItem.productId, type: "RESTOCK", quantity: qty, note: `RMA ${rma.id}` },
     })
@@ -74,6 +83,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     }
     try { await sendRefundEmail(rma.orderId) } catch {}
   }
+
+  await logAdminAction({
+    userId: session?.user?.id ?? null,
+    action: "rma.receive",
+    targetType: "ReturnRequest",
+    targetId: rma.id,
+    payload: { received, refundCents },
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
+  })
 
   return NextResponse.json({ ok: true, refundCents })
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
+import { SupportMessageSchema } from "@/lib/validation"
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -24,19 +25,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const isOwner = session?.user?.id && (ticket.userId === session.user.id || ticket.email === session.user.email)
   if (!isAgent && !isOwner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const body = await req.json().catch(() => ({}))
-  if (!body.body) return NextResponse.json({ error: "body required" }, { status: 400 })
+  const json = await req.json().catch(() => ({}))
+  const parsed = SupportMessageSchema.safeParse(json)
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 422 })
 
   const message = await prisma.supportMessage.create({
     data: {
       ticketId: ticket.id,
       author: isAgent ? "AGENT" : "CUSTOMER",
-      body: body.body,
+      body: parsed.data.body,
     },
   })
   await prisma.supportTicket.update({
     where: { id: ticket.id },
-    data: { status: (body.status as any) ?? ticket.status, updatedAt: new Date() },
+    data: { status: (parsed.data.status as any) ?? ticket.status, updatedAt: new Date() },
   })
 
   return NextResponse.json(message, { status: 201 })

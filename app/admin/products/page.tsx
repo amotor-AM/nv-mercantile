@@ -6,27 +6,31 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
+import { csrfHeader } from "@/lib/csrf"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function ProductsAdmin() {
   const { data, mutate } = useSWR("/api/admin/products", fetcher)
+  const { data: cats } = useSWR("/api/admin/categories", fetcher)
   const items = data ?? []
-  const [form, setForm] = useState<any>({ slug: "", name: "", price: 0 })
+  const categories = cats ?? []
+  const [form, setForm] = useState<any>({ slug: "", name: "", price: 0, category: "" })
   const fileRef = useRef<HTMLInputElement>(null)
 
   const create = async () => {
     await fetch("/api/admin/products", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ ...form, price: Number(form.price) }),
     })
-    setForm({ slug: "", name: "", price: 0 })
+    setForm({ slug: "", name: "", price: 0, category: "" })
     mutate()
   }
 
   const remove = async (id: string) => {
-    await fetch(`/api/admin/products/${id}`, { method: "DELETE" })
+    await fetch(`/api/admin/products/${id}`, { method: "DELETE", headers: { ...csrfHeader() } })
     mutate()
   }
 
@@ -35,7 +39,7 @@ export default function ProductsAdmin() {
     if (!file) return
     const fd = new FormData()
     fd.set("file", file)
-    await fetch("/api/admin/import/products", { method: "POST", body: fd })
+    await fetch("/api/admin/import/products", { method: "POST", body: fd, headers: { ...csrfHeader() } })
     if (fileRef.current) fileRef.current.value = ""
     mutate()
   }
@@ -49,7 +53,16 @@ export default function ProductsAdmin() {
         <Input placeholder="Name" value={form.name} onChange={(e) => setForm((f:any) => ({ ...f, name: e.target.value }))} />
         <Input placeholder="Price" type="number" value={form.price} onChange={(e) => setForm((f:any) => ({ ...f, price: e.target.value }))} />
         <Input placeholder="Material" value={form.material ?? ""} onChange={(e) => setForm((f:any) => ({ ...f, material: e.target.value }))} />
-        <Input placeholder="Category" value={form.category ?? ""} onChange={(e) => setForm((f:any) => ({ ...f, category: e.target.value }))} />
+        <Select value={form.category} onValueChange={(v) => setForm((f:any) => ({ ...f, category: v }))}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select category" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((c: any) => (
+              <SelectItem key={c.id} value={c.slug}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button onClick={create}>Add Product</Button>
       </div>
 
@@ -78,7 +91,7 @@ export default function ProductsAdmin() {
                 <TableCell className="font-medium">{p.name}</TableCell>
                 <TableCell>${p.price}</TableCell>
                 <TableCell>{p.stockLevel}</TableCell>
-                <TableCell>{p.category}</TableCell>
+                <TableCell>{p.category?.name ?? ""}</TableCell>
                 <TableCell>
                   <div className="flex gap-2">
                     <a href={`/admin/products/${p.id}/images`}>

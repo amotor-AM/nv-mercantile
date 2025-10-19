@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import paypal from "@paypal/checkout-server-sdk"
 import { prisma } from "@/lib/db"
+import { limit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
+import * as Sentry from "@sentry/nextjs"
 
 function getPayPalClient() {
   const env = process.env.PAYPAL_ENV || "sandbox"
@@ -15,6 +18,11 @@ function getPayPalClient() {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit checkout intent creation per IP
+  const ip = getClientIp(req)
+  const ok = await limit(`checkout:paypal:${ip}`)
+  if (!ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+
   const client = getPayPalClient()
   if (!client) return NextResponse.json({ error: "PayPal not configured" }, { status: 500 })
   const { orderId } = (await req.json().catch(() => ({}))) as { orderId?: string }
@@ -22,6 +30,8 @@ export async function POST(req: NextRequest) {
 
   const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } })
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 })
+
+  const amount = order.items.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
   const request = new paypal.orders.OrdersCreateRequest()
   request.prefer("return=representation")
@@ -31,7 +41,7 @@ export async function POST(req: NextRequest) {
       {
         amount: {
           currency_code: order.currency.toUpperCase(),
-          value: (order.total / 100).toFixed(2),
+          value: (amount / 100).toFixed(2),
         },
         custom_id: order.id,
       },
@@ -42,12 +52,17 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  const response = await client.execute(request as any)
-  await prisma.order.update({
-    where: { id: order.id },
-    data: { status: "AWAITING_PAYMENT", paymentProvider: "paypal", paymentIntentId: String(response.result.id) },
-  })
+  try {
+    const response = await client.execute(request as any)
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "AWAITING_PAYMENT", paymentProvider: "paypal", paymentIntentId: String(response.result.id), total: amount },
+    })
 
-  const approve = response.result.links?.find((l: any) => l.rel === "approve")?.href
-  return NextResponse.json({ id: response.result.id, approveUrl: approve })
+    const approve = response.result.links?.find((l: any) => l.rel === "approve")?.href
+    return NextResponse.json({ id: response.result.id, approveUrl: approve })
+  } catch (e: any) {
+    try { Sentry.captureException(e) } catch {}
+    return NextResponse.json({ error: e?.message || "PayPal error" }, { status: 500 })
+  }
 }

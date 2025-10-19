@@ -4,6 +4,7 @@ import "./globals.css"
 import { Providers } from "./providers"
 import { Analytics } from "@vercel/analytics/react"
 import { GoogleAnalytics } from "next/third-parties/google"
+import { cookies } from "next/headers"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -17,12 +18,13 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const consent = cookies().get("nv_consent_analytics")?.value === "true"
   return (
     <html lang="en">
       <body className={inter.className}>
         <Providers>{children}</Providers>
         <Analytics />
-        {process.env.NEXT_PUBLIC_GA_ID ? <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID!} /> : null}
+        {process.env.NEXT_PUBLIC_GA_ID && consent ? <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID!} /> : null}
       </body>
     </html>
   )

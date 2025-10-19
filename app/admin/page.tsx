@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
+import { csrfHeader } from "@/lib/csrf"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -36,7 +37,7 @@ export default function AdminDashboard() {
     setUpdating(id)
     await fetch(`/api/orders/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeader() },
       body: JSON.stringify({ status, ...extra }),
     })
     await mutate()
@@ -77,6 +78,10 @@ export default function AdminDashboard() {
         <Link href="/admin/returns"><Button variant="outline">Returns</Button></Link>
         <Link href="/admin/support"><Button variant="outline">Support</Button></Link>
         <Link href="/admin/analytics"><Button variant="outline">Analytics</Button></Link>
+        <Link href="/admin/ops"><Button variant="outline">Ops</Button></Link>
+        <Link href="/admin/categories"><Button variant="outline">Categories</Button></Link>
+        <Link href="/admin/navigation"><Button variant="outline">Navigation</Button></Link>
+        <Link href="/admin/security"><Button variant="outline">Security</Button></Link>
       </div>
       <Separator className="my-2" />
 
@@ -99,7 +104,9 @@ export default function AdminDashboard() {
               {orders?.map((o: any) => (
                 <TableRow key={o.id}>
                   <TableCell>
-                    <div className="font-medium">{o.orderNumber}</div>
+                    <div className="font-medium">
+                      <Link href={`/admin/orders/${o.id}`}>{o.orderNumber}</Link>
+                    </div>
                     <div className="flex gap-2">
                       <a className="text-xs underline" href={`/api/orders/${o.id}/invoice.pdf`} target="_blank" rel="noopener noreferrer">Invoice PDF</a>
                       <a className="text-xs underline" href={`/api/orders/${o.id}/packing-slip.pdf`} target="_blank" rel="noopener noreferrer">Packing Slip</a>
@@ -109,35 +116,43 @@ export default function AdminDashboard() {
                     <div className="text-sm">{o.email}</div>
                     <div className="text-xs text-muted-foreground">{o.paymentProvider ?? "-"}</div>
                   </TableCell>
-                  <TableCell className="capitalize">{o.status.toLowerCase()}</TableCell>
+                    <TableCell className="capitalize">{o.status.toLowerCase()}</TableCell>
                   <TableCell>${(o.total / 100).toFixed(2)}</TableCell>
                   <TableCell>{new Date(o.updatedAt).toLocaleString()}</TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <Input
-                        placeholder="Carrier"
-                        defaultValue={o.trackingCarrier ?? ""}
-                        onBlur={(e) => updateStatus(o.id, o.status, { trackingCarrier: e.target.value })}
-                      />
-                      <Input
-                        placeholder="Tracking number"
-                        defaultValue={o.trackingNumber ?? ""}
-                        onBlur={(e) => updateStatus(o.id, o.status, { trackingNumber: e.target.value })}
-                      />
-                      <Input
-                        placeholder="Tracking URL"
-                        defaultValue={o.trackingUrl ?? ""}
-                        onBlur={(e) => updateStatus(o.id, o.status, { trackingUrl: e.target.value })}
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={updating === o.id}
-                          onClick={() => updateStatus(o.id, "FULFILLED", { shippedAt: new Date().toISOString() })}
-                        >
-                          Mark shipped
-                        </Button>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/admin/orders/${o.id}/shipments`}>
+                          <Button variant="outline" size="sm">Manage shipments</Button>
+                        </Link>
+                        <span className="text-xs text-muted-foreground">Labels, tracking, pickups</span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Input
+                          placeholder="Carrier"
+                          defaultValue={o.trackingCarrier ?? ""}
+                          onBlur={(e) => updateStatus(o.id, o.status, { trackingCarrier: e.target.value })}
+                        />
+                        <Input
+                          placeholder="Tracking number"
+                          defaultValue={o.trackingNumber ?? ""}
+                          onBlur={(e) => updateStatus(o.id, o.status, { trackingNumber: e.target.value })}
+                        />
+                        <Input
+                          placeholder="Tracking URL"
+                          defaultValue={o.trackingUrl ?? ""}
+                          onBlur={(e) => updateStatus(o.id, o.status, { trackingUrl: e.target.value })}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={updating === o.id}
+                            onClick={() => updateStatus(o.id, "FULFILLED", { shippedAt: new Date().toISOString() })}
+                          >
+                            Mark shipped
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </TableCell>
@@ -164,10 +179,13 @@ export default function AdminDashboard() {
                         variant="outline"
                         size="sm"
                         disabled={updating === o.id}
-                        onClick={() => fetch(`/api/orders/${o.id}/refund`, { method: "POST" }).then(() => mutate())}
+                        onClick={() => fetch(`/api/orders/${o.id}/refund`, { method: "POST", headers: { ...csrfHeader() } }).then(() => mutate())}
                       >
                         Refund
                       </Button>
+                      <Link href={`/admin/orders/${o.id}`}>
+                        <Button variant="outline" size="sm">Details</Button>
+                      </Link>
                     </div>
                   </TableCell>
                 </TableRow>

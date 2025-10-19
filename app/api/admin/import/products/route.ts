@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { parse } from "csv-parse/sync"
+import { logAdminAction, getClientIp } from "@/lib/security"
+import { recomputeInStock, recomputeProductInStock } from "@/lib/inventory"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -23,33 +25,54 @@ export async function POST(req: NextRequest) {
     const slug = r.slug || r.id
     if (!slug) continue
     const price = Number(r.price ?? 0)
+    let categoryId: string | undefined = undefined
+    const categorySlug = r.category || ""
+    if (categorySlug) {
+      const cat = await prisma.category.findUnique({ where: { slug: categorySlug } })
+      categoryId = cat?.id ?? undefined
+    }
+    const stockLevel = Number(r.stockLevel ?? 0)
     const data: any = {
       slug,
       name: r.name || slug,
       subtitle: r.subtitle || "",
       price: isNaN(price) ? 0 : price,
       material: r.material || "",
-      category: r.category || "",
       leadTime: r.leadTime || "2-3 weeks",
       leadTimeDays: Number(r.leadTimeDays ?? 7),
-      stockLevel: Number(r.stockLevel ?? 0),
+      stockLevel,
       safetyStock: Number(r.safetyStock ?? 0),
       reorderPoint: Number(r.reorderPoint ?? 0),
-      inStock: String(r.inStock).toLowerCase() === "true",
+      inStock: recomputeInStock(stockLevel),
       description: r.description || "",
       image: r.image || "",
       dimensions: r.dimensions || "",
       weight: r.weight || "",
       specifications: {},
       applications: [],
+      categoryId,
     }
-    await prisma.product.upsert({
+    const prod = await prisma.product.upsert({
       where: { slug },
       create: data,
       update: data,
     })
+    // Recompute product inStock from aggregate variant + product stock
+    await recomputeProductInStock(prisma, prod.id)
     updated++
   }
+
+  try {
+    await logAdminAction({
+      userId: session?.user?.id ?? null,
+      action: "import.products",
+      targetType: "Product",
+      targetId: null,
+      payload: { count: updated, filename: (file as any).name ?? null },
+      ip: getClientIp(req),
+      userAgent: req.headers.get("user-agent"),
+    })
+  } catch {}
 
   return NextResponse.json({ ok: true, updated })
 }

@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
 import { sendRmaRequestedEmail } from "@/lib/email"
+import { RmaStartSchema } from "@/lib/validation"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const body = await req.json().catch(() => ({}))
-  const { reason, items } = body as { reason?: string; items: { orderItemId: string; quantity: number }[] }
-  if (!items?.length) return NextResponse.json({ error: "items required" }, { status: 400 })
+  const json = await req.json().catch(() => ({}))
+  const parsed = RmaStartSchema.safeParse(json)
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 422 })
+
+  const { reason, items } = parsed.data
 
   const order = await prisma.order.findUnique({ where: { id: params.id }, include: { items: true } })
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 })

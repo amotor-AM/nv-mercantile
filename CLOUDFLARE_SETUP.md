@@ -1,69 +1,54 @@
-# 🚀 Cloudflare Pages Setup Guide - NV Mercantile
+# Cloudflare Pages SSR Setup (Next.js + next-on-pages)
 
-## CRITICAL: Manual Configuration Required
+This project now targets Server-Side Rendering on Cloudflare Pages so that API routes, authentication, and Stripe webhooks work correctly.
 
-Cloudflare Pages **MUST** be configured manually in the dashboard. Auto-detection is not working.
+## Create a Cloudflare Pages Project
 
-## Step 1: Create New Cloudflare Pages Project
+1. Go to https://dash.cloudflare.com/
+2. Navigate to Workers & Pages → Pages
+3. Click “Create a project”
+4. Choose “Connect to Git” and select your repository
 
-1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/)
-2. Navigate to **Workers & Pages** → **Pages**
-3. Click **Create a project**
-4. Choose **Connect to Git**
-5. Select your GitHub repository: `amotor-AM/nv-mercantile`
+## Build Settings (Dashboard → Project → Settings → Builds & deployments)
 
-## Step 2: Configure Build Settings
+- Project name: nv-mercantile
+- Production branch: main
+- Framework preset: None
+- Build command: `yarn cf:build`
+- Build output directory: `.vercel/output/static` (auto)
+- Root directory: leave empty
 
-**CRITICAL:** Set these exact values in the build configuration:
+Cloudflare will deploy the `.vercel/output` bundle produced by `@cloudflare/next-on-pages`, enabling SSR and functions.
 
-- **Project name**: `nv-mercantile`
-- **Production branch**: `main`
-- **Framework preset**: `Next.js (Static HTML Export)` ⚠️ **MUST SELECT THIS**
-- **Build command**: `yarn build`
-- **Build output directory**: `dist`
-- **Root directory**: (leave empty)
+## Required Environment Variables
 
-## Step 3: Environment Variables
+- NEXTAUTH_URL
+- NEXTAUTH_SECRET
+- DATABASE_PROVIDER (postgresql/mysql)
+- DATABASE_URL (managed DB connection string)
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
-Add these environment variables:
+Optional:
+- UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN (rate limiting)
+- RESEND_API_KEY / RESEND_FROM (email)
 
-- **NODE_VERSION**: `18.18.0`
+## Logs
 
-## Step 4: Deploy
+View deployment logs and function runtime logs under Pages → Deployments → Logs.
 
-Click **Save and Deploy**
+## Stripe Webhook
 
-## Expected Build Process
+Ensure STRIPE_WEBHOOK_SECRET is set. The webhook endpoint is:
+- Production: https://your-domain.com/api/webhooks/stripe
 
-With correct configuration, Cloudflare Pages will:
-1. ✅ Run `yarn build` (NOT `wrangler deploy`)
-2. ✅ Generate static files in `dist/` directory
-3. ✅ Deploy as static site
+Stripe dashboard → Webhooks → Add endpoint → use the above URL.
 
 ## Troubleshooting
 
-### If you see "wrangler deploy" error:
-- ❌ Framework preset is NOT set to "Next.js (Static HTML Export)"
-- ❌ Build output directory is NOT set to "dist"
-- ❌ There are leftover wrangler.toml or functions/ files
+- Prisma requires a remote DB; SQLite will not work in production on Cloudflare.
+- If CSRF errors occur, ensure the browser sends `x-csrf-token` (the app fetch helpers do this).
+- If a webhook signature error occurs, verify STRIPE_WEBHOOK_SECRET and do not modify the raw request body.
 
-### If build fails:
-- Check Node.js version is set to 22.16.0
-- Verify build command is `yarn build`
-- Ensure no TypeScript/ESLint errors (they're ignored in config)
-
-## Repository Structure
-
-The repository is now clean:
-- ❌ No `wrangler.toml` (removed)
-- ❌ No `functions/` directory (removed)
-- ✅ Standard Next.js structure
-- ✅ Static export configuration in `next.config.mjs`
-- ✅ Node.js version specified in `package.json` and `.nvmrc`
-
-## Final Notes
-
-- This is a **static site deployment**, not Cloudflare Workers
-- Framework preset selection is **mandatory** for proper detection
-- Build output goes to `dist/` directory (changed from `out/`)
-- All Cloudflare Workers configurations have been removed
+This setup runs SSR on Cloudflare without Workers configuration files. Use the provided `cf:build` script.

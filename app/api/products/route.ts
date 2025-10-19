@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { limit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 export async function GET(req: NextRequest) {
+  // Basic public rate limit by IP to mitigate scraping/DoS on product listings
+  const ip = getClientIp(req)
+  const ok = await limit(`products:${ip}`)
+  if (!ok) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+  }
+
   const { searchParams } = new URL(req.url)
   const page = Number(searchParams.get("page") ?? "1")
   const pageSize = Math.min(Number(searchParams.get("pageSize") ?? "20"), 100)
-  const category = searchParams.get("category") ?? undefined
+  const categorySlug = searchParams.get("category") ?? undefined
   const q = searchParams.get("q") ?? undefined
   const minPrice = searchParams.get("minPrice")
   const maxPrice = searchParams.get("maxPrice")
@@ -16,7 +25,7 @@ export async function GET(req: NextRequest) {
   const sort = searchParams.get("sort") // price_asc | price_desc | newest | rating_desc
 
   const where: any = {}
-  if (category) where.category = category
+  if (categorySlug) where.category = { is: { slug: categorySlug } }
   if (q) {
     where.OR = [
       { name: { contains: q, mode: "insensitive" } },
@@ -41,7 +50,8 @@ export async function GET(req: NextRequest) {
     if (list.length) where.applications = { hasSome: list }
   }
   if (inStock === "true") {
-    where.OR = [...(where.OR || []), { inStock: true }, { stockLevel: { gt: 0 } }]
+    // Tighten filter to rely solely on aggregate inStock semantics
+    where.AND = [...(where.AND || []), { inStock: true }]
   }
   if (ratingMin) {
     where.rating = { gte: Number(ratingMin) }
@@ -53,16 +63,21 @@ export async function GET(req: NextRequest) {
   else if (sort === "rating_desc") orderBy = { rating: "desc" }
   else if (sort === "newest") orderBy = { createdAt: "desc" }
 
-  const [items, total, categoriesAgg, materialsAgg] = await Promise.all([
+  const [items, total, materialsAgg, categories] = await Promise.all([
     prisma.product.findMany({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy,
+      include: { category: true },
     }),
     prisma.product.count({ where }),
-    prisma.product.groupBy({ by: ["category"], _count: { _all: true } }),
     prisma.product.groupBy({ by: ["material"], _count: { _all: true } }),
+    prisma.category.findMany({
+      where: { isVisible: true },
+      orderBy: { order: "asc" },
+      include: { _count: { select: { products: true } } },
+    }),
   ])
 
   // derive application facets from current result set (could be from full set if needed)
@@ -74,15 +89,23 @@ export async function GET(req: NextRequest) {
   }
   const applicationsAgg = Array.from(appsCount.entries()).map(([name, count]) => ({ name, count }))
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     page,
     pageSize,
     total,
     items,
     facets: {
-      categories: categoriesAgg.map((c) => ({ name: c.category, count: c._count._all })),
+      categories: categories.map((c) => ({ slug: c.slug, name: c.name, count: c._count.products })),
       materials: materialsAgg.map((m) => ({ name: m.material, count: m._count._all })),
       applications: applicationsAgg,
     },
   })
+
+  // Short TTL CDN caching
+  const ttl = 120 // seconds
+  res.headers.set("Cache-Control", `public, s-maxage=${ttl}, stale-while-revalidate=600`)
+  res.headers.set("CDN-Cache-Control", `public, s-maxage=${ttl}`)
+  res.headers.set("Vary", "Accept, Accept-Encoding")
+
+  return res
 }

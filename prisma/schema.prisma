@@ -20,6 +20,15 @@ model User {
   tickets       SupportTicket[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  auditLogs     AuditLog[]
+
+  // Security & 2FA
+  twoFactorEnabled Boolean              @default(false)
+  totpSecret       String?
+  backupCodes      BackupCode[]
+  devices          UserDevice[]
+  webAuthnCreds    WebAuthnCredential[]
 }
 
 model Product {
@@ -46,13 +55,16 @@ model Product {
   safetyStock    Int          @default(0)
   reorderPoint   Int          @default(0)
   leadTimeDays   Int          @default(7)
-  category       String
+  category       Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId     String?
   orderItems     OrderItem[]
   movements      InventoryMovement[]
   variants       Variant[]
   images         ProductImage[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([categoryId])
 }
 
 model Variant {
@@ -89,17 +101,30 @@ model Order {
   currency        String       @default("usd")
   paymentProvider String?
   paymentIntentId String?
+  paymentProcessedId String?   // idempotency guard: provider-specific processed id (e.g., Stripe PI id or PayPal capture id)
   refundStatus    RefundStatus @default(NONE)
   items           OrderItem[]
   refunds         Refund[]
   rmas            ReturnRequest[]
+  shipments       Shipment[]
   shippingName    String?
   shippingPhone   String?
+  // Legacy full address fallback
   shippingAddress String?
+  // Structured shipping address
+  shippingAddress1 String?
+  shippingAddress2 String?
+  shippingCity     String?
+  shippingState    String?
+  shippingPostalCode String?
+  shippingCountry  String?     @default("US")
+  shippingLat      Float?
+  shippingLng      Float?
   trackingCarrier String?
   trackingNumber  String?
   trackingUrl     String?
   shippedAt       DateTime?
+  paidAt          DateTime?    // set when payment finalized
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 }
@@ -163,6 +188,59 @@ model ReturnItem {
   receivedQty  Int           @default(0)
 }
 
+model Shipment {
+  id                 String            @id @default(cuid())
+  order              Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId            String
+  carrier            String?
+  service            String?
+  trackingNumber     String?
+  trackingUrl        String?
+  status             ShipmentStatus    @default(CREATED)
+  labelUrl           String?
+  labelCost          Int?
+  labelCurrency      String?           @default("usd")
+  provider           ShippingProvider  @default(MOCK)
+  providerShipmentId String?
+  rawEvents          Json?
+  shippedAt          DateTime?
+  deliveredAt        DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  items              ShipmentItem[]
+  events             ShipmentEvent[]
+
+  @@index([orderId])
+  @@index([status])
+  @@unique([trackingNumber])
+}
+
+model ShipmentItem {
+  id           String     @id @default(cuid())
+  shipment     Shipment   @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId   String
+  orderItem    OrderItem  @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  orderItemId  String
+  quantity     Int
+
+  @@index([shipmentId])
+  @@index([orderItemId])
+}
+
+model ShipmentEvent {
+  id         String         @id @default(cuid())
+  shipment   Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String
+  status     ShipmentStatus?
+  description String?
+  location   String?
+  occurredAt DateTime
+  raw        Json?
+
+  @@index([shipmentId, occurredAt])
+}
+
 model SupportTicket {
   id        String           @id @default(cuid())
   user      User?            @relation(fields: [userId], references: [id])
@@ -220,6 +298,118 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String
+  targetType  String?
+  targetId    String?
+  payloadHash String
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  description String?
+  isVisible   Boolean    @default(true)
+  order       Int        @default(0)
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryHierarchy")
+  products    Product[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([isVisible, order])
+  @@index([parentId])
+}
+
+// 2FA backup codes
+model BackupCode {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Registered/trusted devices
+model UserDevice {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  name        String?
+  fingerprint String?
+  userAgent   String?
+  ip          String?
+  trusted     Boolean  @default(false)
+  lastSeen    DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, trusted])
+}
+
+// WebAuthn credentials (optional)
+model WebAuthnCredential {
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  credentialId  String   @unique
+  publicKey     String
+  counter       Int      @default(0)
+  name          String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum NavigationLocation {
+  HEADER
+  FOOTER
+}
+
+model NavigationItem {
+  id        String             @id @default(cuid())
+  location  NavigationLocation
+  key       String
+  label     String
+  url       String
+  icon      String?
+  order     Int                @default(0)
+  isVisible Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([location, key])
+  @@index([location, order])
+}
+
+enum AttributeType {
+  STRING
+  NUMBER
+}
+
+model AllowedAttribute {
+  id        String        @id @default(cuid())
+  key       String        @unique
+  label     String
+  type      AttributeType @default(STRING)
+  options   String[]      // if present, values must be one of these
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
 enum Role {
   ADMIN
   MANAGER
@@ -268,4 +458,22 @@ enum RmaStatus {
   IN_TRANSIT
   RECEIVED
   REFUNDED
+}
+
+enum ShipmentStatus {
+  CREATED
+  LABEL_PURCHASED
+  PRE_TRANSIT
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  EXCEPTION
+  CANCELLED
+}
+
+enum ShippingProvider {
+  SHIPPO
+  EASYPOST
+  AFTERSHIP
+  MOCK
 }
