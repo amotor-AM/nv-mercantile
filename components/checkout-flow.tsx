@@ -14,6 +14,7 @@ import { Elements, PaymentElement, useElements, useStripe, PaymentRequestButtonE
 import { stripePromise } from "@/lib/stripe-client"
 import { track } from "@vercel/analytics"
 import { csrfHeader } from "@/lib/csrf"
+import Image from "next/image"
 
 interface CheckoutFormData {
   email: string
@@ -127,7 +128,7 @@ function StripeReviewAndPlaceOrder(props: {
         </div>
 
         {errorMessage && (
-          <div className="text-sm text-destructive">
+          <div className="text-sm text-destructive" aria-live="polite">
             {errorMessage}
           </div>
         )}
@@ -162,6 +163,7 @@ function StripeReviewAndPlaceOrder(props: {
           }}
           disabled={isProcessing || !stripe || !elements}
           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300"
+          type="button"
         >
           {isProcessing ? "Processing..." : "Place Order"}
         </Button>
@@ -222,6 +224,8 @@ export function CheckoutFlow() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  const isEmailValid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+
   const createOrderAndPaymentIntent = async () => {
     // Create the order
     const orderRes = await fetch("/api/orders", {
@@ -266,6 +270,9 @@ export function CheckoutFlow() {
     if (step === 1) {
       setIsProcessing(true)
       try {
+        if (!isEmailValid(formData.email)) {
+          throw new Error("Please enter a valid email address.")
+        }
         await createOrderAndPaymentIntent()
         track("add_shipping_info", { orderId, email: formData.email })
         setCurrentStep(2)
@@ -290,7 +297,7 @@ export function CheckoutFlow() {
     <div className="max-w-7xl mx-auto px-4 py-8 min-h-[80vh]">
       {/* Progress Steps */}
       <div className="flex items-center justify-center mb-12">
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-4" role="group" aria-label="Checkout progress">
           {[1, 2, 3].map((step) => (
             <div key={step} className="flex items-center">
               <div
@@ -299,6 +306,7 @@ export function CheckoutFlow() {
                     ? "bg-primary text-primary-foreground"
                     : "bg-gray-200 text-gray-600"
                 }`}
+                aria-current={currentStep === step ? "step" : undefined}
               >
                 {step}
               </div>
@@ -307,6 +315,7 @@ export function CheckoutFlow() {
                   className={`w-16 h-1 mx-2 ${
                     currentStep > step ? "bg-primary" : "bg-gray-200"
                   }`}
+                  aria-hidden="true"
                 />
               )}
             </div>
@@ -330,6 +339,7 @@ export function CheckoutFlow() {
                     value={formData.firstName}
                     onChange={(e) => handleInputChange("firstName", e.target.value)}
                     placeholder="First Name"
+                    aria-invalid={!formData.firstName ? true : undefined}
                   />
                 </div>
                 <div>
@@ -339,6 +349,7 @@ export function CheckoutFlow() {
                     value={formData.lastName}
                     onChange={(e) => handleInputChange("lastName", e.target.value)}
                     placeholder="Last Name"
+                    aria-invalid={!formData.lastName ? true : undefined}
                   />
                 </div>
               </div>
@@ -351,7 +362,14 @@ export function CheckoutFlow() {
                   value={formData.email}
                   onChange={(e) => handleInputChange("email", e.target.value)}
                   placeholder="Email"
+                  aria-invalid={!formData.email || !isEmailValid(formData.email) ? true : undefined}
+                  aria-describedby="email-error"
                 />
+                {!isEmailValid(formData.email) && formData.email && (
+                  <p id="email-error" className="text-sm text-destructive mt-1" aria-live="polite">
+                    Please enter a valid email address.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -361,6 +379,7 @@ export function CheckoutFlow() {
                   value={formData.phoneNumber}
                   onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
                   placeholder="Phone Number"
+                  aria-invalid={!formData.phoneNumber ? true : undefined}
                 />
               </div>
 
@@ -371,13 +390,15 @@ export function CheckoutFlow() {
                   value={formData.address}
                   onChange={(e) => handleInputChange("address", e.target.value)}
                   placeholder="Full Address"
+                  aria-invalid={!formData.address ? true : undefined}
                 />
               </div>
 
               <Button
                 onClick={() => handleStepComplete(1)}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                disabled={isProcessing || !formData.firstName || !formData.lastName || !formData.email || !formData.address}
+                disabled={isProcessing || !formData.firstName || !formData.lastName || !formData.email || !formData.address || !isEmailValid(formData.email)}
+                type="button"
               >
                 {isProcessing ? "Preparing Payment..." : "Continue to Payment"}
               </Button>
@@ -410,11 +431,12 @@ export function CheckoutFlow() {
 
                       <div className="space-y-3">
                         <Label>Payment Method</Label>
-                        <div className="flex gap-3">
+                        <div className="flex gap-3" role="radiogroup" aria-label="Select payment method">
                           <button
                             className={`px-3 py-2 rounded border ${formData.paymentMethod === "stripe" ? "border-primary" : "border-gray-200"}`}
                             onClick={() => handleInputChange("paymentMethod", "stripe")}
                             type="button"
+                            aria-pressed={formData.paymentMethod === "stripe"}
                           >
                             Stripe (Card)
                           </button>
@@ -422,6 +444,7 @@ export function CheckoutFlow() {
                             className={`px-3 py-2 rounded border ${formData.paymentMethod === "paypal" ? "border-primary" : "border-gray-200"}`}
                             onClick={() => handleInputChange("paymentMethod", "paypal")}
                             type="button"
+                            aria-pressed={formData.paymentMethod === "paypal"}
                           >
                             PayPal
                           </button>
@@ -445,12 +468,13 @@ export function CheckoutFlow() {
                       </div>
 
                       <div className="flex gap-4">
-                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1">
+                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1" type="button">
                           Back
                         </Button>
                         <Button
                           onClick={() => handleStepComplete(2)}
                           className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                          type="button"
                         >
                           Continue to Review
                         </Button>
@@ -507,12 +531,13 @@ export function CheckoutFlow() {
                       </div>
 
                       <div className="flex gap-4">
-                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1">
+                        <Button variant="outline" onClick={() => setCurrentStep(1)} className="flex-1" type="button">
                           Back
                         </Button>
                         <Button
                           onClick={() => handleStepComplete(2)}
                           className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                          type="button"
                         >
                           Continue to Review
                         </Button>
@@ -533,7 +558,7 @@ export function CheckoutFlow() {
                           <p className="text-sm text-gray-600">{formData.address}</p>
                           <p className="text-sm text-gray-600">{formData.email}</p>
                           <p className="text-sm text-gray-600">{formData.phoneNumber}</p>
-                          <button className="text-sm text-blue-600 underline mt-2" onClick={() => setCurrentStep(1)}>
+                          <button className="text-sm text-blue-600 underline mt-2" onClick={() => setCurrentStep(1)} type="button">
                             Edit
                           </button>
                         </div>
@@ -542,12 +567,12 @@ export function CheckoutFlow() {
                           <h3 className="font-medium mb-2">Payment Method</h3>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+                              <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center" aria-hidden="true">
                                 <span className="text-sm font-medium">💳</span>
                               </div>
                               <span className="capitalize">{formData.paymentMethod}</span>
                             </div>
-                            <button className="text-sm text-blue-600 underline" onClick={() => setCurrentStep(2)}>
+                            <button className="text-sm text-blue-600 underline" onClick={() => setCurrentStep(2)} type="button">
                               Edit
                             </button>
                           </div>
@@ -587,6 +612,7 @@ export function CheckoutFlow() {
                           }}
                           disabled={isProcessing}
                           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300"
+                          type="button"
                         >
                           {isProcessing ? "Processing..." : "Place Order"}
                         </Button>
@@ -641,10 +667,12 @@ export function CheckoutFlow() {
                 const product = getProductById(item.id)
                 return (
                   <div key={item.id} className="flex gap-4">
-                    <img
+                    <Image
                       src={item.image || "/placeholder.svg"}
                       alt={item.name}
-                      className="w-20 h-20 object-cover rounded"
+                      width={80}
+                      height={80}
+                      className="object-cover rounded"
                     />
                     <div className="flex-1">
                       <h4 className="font-medium text-sm">${item.price.toFixed(2)}</h4>

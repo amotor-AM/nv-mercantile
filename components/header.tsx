@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { CartIcon } from "@/components/cart-icon"
 import { useRouter } from "next/navigation"
 import { useSession, signIn, signOut } from "next-auth/react"
+import Image from "next/image"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -105,23 +106,27 @@ export function Header() {
                     value={searchQuery}
                     onChange={(e) => handleSearch(e.target.value)}
                     className="border-0 bg-transparent p-0 focus-visible:ring-0 text-sm w-full"
+                    aria-label="Search products"
                   />
                 </div>
                 
                 {/* Search Results Dropdown */}
                 {showSearchResults && searchResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-background border border-border rounded-lg shadow-lg z-50">
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-background border border-border rounded-lg shadow-lg z-50" role="listbox" aria-label="Search results">
                     {searchResults.map((product) => (
                       <button
                         key={product.id}
                         onClick={() => handleProductClick(product.id)}
                         className="w-full p-3 text-left hover:bg-muted transition-colors border-b border-border last:border-b-0"
+                        type="button"
                       >
                         <div className="flex items-center gap-3">
-                          <img 
+                          <Image 
                             src={product.image} 
                             alt={product.name}
-                            className="w-12 h-12 object-cover rounded"
+                            width={48}
+                            height={48}
+                            className="object-cover rounded"
                           />
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">{product.name}</p>
@@ -156,7 +161,7 @@ export function Header() {
             )}
 
             {/* Mobile menu button */}
-            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)} aria-label="Toggle menu">
               {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
           </div>
@@ -178,6 +183,7 @@ export function Header() {
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="border-0 bg-transparent p-0 focus-visible:ring-0 text-sm" 
+                  aria-label="Search products"
                 />
               </div>
               <div className="flex items-center gap-3 pt-2">

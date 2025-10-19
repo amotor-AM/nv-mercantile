@@ -8,6 +8,8 @@ import { ProductImageGallery } from "@/components/product-image-gallery"
 import { useCartStore } from "@/lib/cart-store"
 import { getProduct } from "@/lib/product-data"
 import { track } from "@vercel/analytics"
+import Image from "next/image"
+import { SizeSelector } from "@/components/size-selector"
 
 interface ProductDetailsProps {
   productId: string
@@ -15,6 +17,7 @@ interface ProductDetailsProps {
 
 export function ProductDetails({ productId }: ProductDetailsProps) {
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  const [selectedSize, setSelectedSize] = useState<string>("")
 
   const { addItem, openCart } = useCartStore()
 
@@ -53,14 +56,14 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8">
-        <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-          <ChevronLeft className="w-6 h-6" />
+        <button className="p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="Previous product" type="button">
+          <ChevronLeft className="w-6 h-6" aria-hidden="true" />
         </button>
         <div className="text-center">
           <p className="text-sm text-gray-600">Professional Manufacturing Services</p>
         </div>
-        <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-          <ChevronRight className="w-6 h-6" />
+        <button className="p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="Next product" type="button">
+          <ChevronRight className="w-6 h-6" aria-hidden="true" />
         </button>
       </div>
 
@@ -74,10 +77,12 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
           {/* Single image display */}
           <div className="flex gap-2 overflow-x-auto">
             <div className="flex-shrink-0 w-16 h-16 border-2 border-gray-200 rounded overflow-hidden">
-              <img
+              <Image
                 src={product.image || "/placeholder.svg"}
                 alt={product.name}
-                className="w-full h-full object-cover"
+                width={64}
+                height={64}
+                className="object-cover"
               />
             </div>
           </div>
@@ -90,13 +95,14 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
             
             {/* Rating */}
             <div className="flex items-center justify-center lg:justify-start gap-2 mb-4">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1" aria-label={`Rated ${product.rating} out of 5`}>
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Star
                     key={i}
                     className={`w-4 h-4 ${
                       i < Math.floor(product.rating) ? "text-yellow-400 fill-current" : "text-gray-300"
                     }`}
+                    aria-hidden="true"
                   />
                 ))}
               </div>
@@ -107,6 +113,13 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
 
             <div className="text-3xl font-bold text-primary mb-4">${product.price}</div>
           </div>
+
+          {/* Variant chooser (size) */}
+          <SizeSelector
+            sizes={["6", "7", "8", "9", "10", "11", "12", "13"]}
+            selectedSize={selectedSize}
+            onSizeSelect={setSelectedSize}
+          />
 
           {/* Product Specifications */}
           <div className="space-y-4">
@@ -176,9 +189,11 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
           <button
             onClick={() => toggleSection('description')}
             className="flex items-center justify-between w-full text-left py-4 border-b"
+            aria-expanded={expandedSection === 'description'}
+            type="button"
           >
             <h3 className="text-lg font-medium">Description</h3>
-            <ChevronDown className={`w-5 h-5 transition-transform ${expandedSection === 'description' ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-5 h-5 transition-transform ${expandedSection === 'description' ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
           {expandedSection === 'description' && (
             <div className="py-4">
@@ -192,9 +207,11 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
           <button
             onClick={() => toggleSection('applications')}
             className="flex items-center justify-between w-full text-left py-4 border-b"
+            aria-expanded={expandedSection === 'applications'}
+            type="button"
           >
             <h3 className="text-lg font-medium">Applications</h3>
-            <ChevronDown className={`w-5 h-5 transition-transform ${expandedSection === 'applications' ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-5 h-5 transition-transform ${expandedSection === 'applications' ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
           {expandedSection === 'applications' && (
             <div className="py-4">
@@ -214,9 +231,11 @@ export function ProductDetails({ productId }: ProductDetailsProps) {
           <button
             onClick={() => toggleSection('specifications')}
             className="flex items-center justify-between w-full text-left py-4 border-b"
+            aria-expanded={expandedSection === 'specifications'}
+            type="button"
           >
             <h3 className="text-lg font-medium">Technical Specifications</h3>
-            <ChevronDown className={`w-5 h-5 transition-transform ${expandedSection === 'specifications' ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-5 h-5 transition-transform ${expandedSection === 'specifications' ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
           {expandedSection === 'specifications' && (
             <div className="py-4">

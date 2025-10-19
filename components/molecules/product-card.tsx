@@ -1,7 +1,8 @@
 import Link from "next/link"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { ProductBadge } from "./product-badge"
 import { cn } from "@/lib/utils"
+import Image from "next/image"
 
 interface ProductCardProps {
   product: {
@@ -33,10 +34,14 @@ export function ProductCard({ product, viewMode = "grid", className }: ProductCa
               viewMode === "grid" ? "aspect-square" : "w-32 h-32 flex-shrink-0"
             )}
           >
-            <img
+            <Image
               src={product.image}
               alt={product.name}
-              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+              fill={viewMode === "grid"}
+              width={viewMode === "grid" ? undefined : 128}
+              height={viewMode === "grid" ? undefined : 128}
+              sizes={viewMode === "grid" ? "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" : "128px"}
+              className="object-cover object-center group-hover:scale-105 transition-transform duration-300"
             />
 
             {/* Badges */}

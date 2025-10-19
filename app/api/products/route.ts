@@ -88,15 +88,23 @@ export async function GET(req: NextRequest) {
   }
   const applicationsAgg = Array.from(appsCount.entries()).map(([name, count]) => ({ name, count }))
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     page,
     pageSize,
     total,
     items,
     facets: {
       categories: categories.map((c) => ({ slug: c.slug, name: c.name, count: c._count.products })),
-      materials: materialsAgg.map((m) => ({ name: m.material, count: m._})),
+      materials: materialsAgg.map((m) => ({ name: m.material, count: m._count._all })),
       applications: applicationsAgg,
     },
   })
+
+  // Short TTL CDN caching
+  const ttl = 120 // seconds
+  res.headers.set("Cache-Control", `public, s-maxage=${ttl}, stale-while-revalidate=600`)
+  res.headers.set("CDN-Cache-Control", `public, s-maxage=${ttl}`)
+  res.headers.set("Vary", "Accept, Accept-Encoding")
+
+  return res
 }
