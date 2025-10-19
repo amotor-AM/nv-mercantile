@@ -223,13 +223,13 @@ export function Footer() {
           <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-background/20">
             <p className="text-sm mb-4 md:mb-0">© 2025 NV Mercantile, Inc. All Rights Reserved</p>
             <div className="flex items-center gap-4 text-sm">
-              <Link href="#" className="hover:text-primary transition-colors">
+              <Link href="/legal/terms" className="hover:text-primary transition-colors">
                 Terms of Service
               </Link>
-              <Link href="#" className="hover:text-primary transition-colors">
+              <Link href="/legal/privacy" className="hover:text-primary transition-colors">
                 Privacy Policy
               </Link>
-              <Link href="#" className="hover:text-primary transition-colors">
+              <Link href="/legal/cookies" className="hover:text-primary transition-colors">
                 Cookie Policy
               </Link>
               <Link href="#" className="hover:text-primary transition-colors">

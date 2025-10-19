@@ -22,6 +22,13 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   auditLogs     AuditLog[]
+
+  // Security & 2FA
+  twoFactorEnabled Boolean              @default(false)
+  totpSecret       String?
+  backupCodes      BackupCode[]
+  devices          UserDevice[]
+  webAuthnCreds    WebAuthnCredential[]
 }
 
 model Product {
@@ -310,6 +317,48 @@ model Category {
 
   @@index([isVisible, order])
   @@index([parentId])
+}
+
+// 2FA backup codes
+model BackupCode {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Registered/trusted devices
+model UserDevice {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  name        String?
+  fingerprint String?
+  userAgent   String?
+  ip          String?
+  trusted     Boolean  @default(false)
+  lastSeen    DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, trusted])
+}
+
+// WebAuthn credentials (optional)
+model WebAuthnCredential {
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  credentialId  String   @unique
+  publicKey     String
+  counter       Int      @default(0)
+  name          String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
 }
 
 enum NavigationLocation {

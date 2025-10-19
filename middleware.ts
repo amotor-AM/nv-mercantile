@@ -19,7 +19,7 @@ export default auth((req) => {
     })
   }
 
-  // Admin area guard
+  // Admin area guard with 2FA enforcement
   if (isAdmin) {
     if (!req.auth) {
       const url = new URL("/signin", nextUrl.origin)
@@ -29,6 +29,18 @@ export default auth((req) => {
     const role = (req.auth as any).user?.role
     if (!["ADMIN", "MANAGER"].includes(role)) {
       return NextResponse.redirect(new URL("/", nextUrl.origin))
+    }
+    const twoFactorEnabled = !!(req.auth as any).user?.twoFactorEnabled
+    const twoFactorCookie = req.cookies.get("nv_2fa_ok")?.value
+    // If 2FA not enabled, force setup page
+    if (!twoFactorEnabled && !nextUrl.pathname.startsWith("/admin/security")) {
+      return NextResponse.redirect(new URL("/admin/security", nextUrl.origin))
+    }
+    // If enabled but not verified on this device, force challenge page
+    if (twoFactorEnabled && twoFactorCookie !== "true" && !nextUrl.pathname.startsWith("/admin/security/2fa")) {
+      const url = new URL("/admin/security/2fa", nextUrl.origin)
+      url.searchParams.set("redirect", nextUrl.href)
+      return NextResponse.redirect(url)
     }
   }
 

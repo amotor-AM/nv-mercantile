@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "crypto"
 import { NextRequest } from "next/server"
 import { prisma } from "./db"
+import { logEvent } from "./logger"
 
 export function getClientIp(req: NextRequest): string {
   const h = req.headers
@@ -37,6 +38,19 @@ export async function logAdminAction(params: {
   } catch {
     // avoid throwing from audit logging
   }
+  // Also log to centralized sink
+  logEvent({
+    msg: "admin_action",
+    data: {
+      userId: params.userId ?? null,
+      action: params.action,
+      targetType: params.targetType ?? null,
+      targetId: params.targetId ?? null,
+      ip: params.ip ?? null,
+      userAgent: params.userAgent ?? null,
+      ts: Date.now(),
+    },
+  })
 }
 
 export function generateCsrfToken(): string {

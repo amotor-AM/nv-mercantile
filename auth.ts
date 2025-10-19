@@ -21,12 +21,10 @@ export const {
     GitHub({
       clientId: process.env.GITHUB_ID || "",
       clientSecret: process.env.GITHUB_SECRET || "",
-      // Do not allow dangerous account linking across OAuth providers
     }),
     Google({
       clientId: process.env.GOOGLE_ID || "",
       clientSecret: process.env.GOOGLE_SECRET || "",
-      // Do not allow dangerous account linking across OAuth providers
     }),
     Email({
       async sendVerificationRequest(params) {
@@ -40,6 +38,7 @@ export const {
       if (session.user) {
         ;(session.user as any).id = user.id
         ;(session.user as any).role = (user as any).role ?? "CUSTOMER"
+        ;(session.user as any).twoFactorEnabled = !!(user as any).twoFactorEnabled
       }
       return session
     },

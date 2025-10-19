@@ -80,6 +80,7 @@ export default function AdminDashboard() {
         <Link href="/admin/analytics"><Button variant="outline">Analytics</Button></Link>
         <Link href="/admin/categories"><Button variant="outline">Categories</Button></Link>
         <Link href="/admin/navigation"><Button variant="outline">Navigation</Button></Link>
+        <Link href="/admin/security"><Button variant="outline">Security</Button></Link>
       </div>
       <Separator className="my-2" />
 
@@ -112,7 +113,7 @@ export default function AdminDashboard() {
                     <div className="text-sm">{o.email}</div>
                     <div className="text-xs text-muted-foreground">{o.paymentProvider ?? "-"}</div>
                   </TableCell>
-                  <TableCell className="capitalize">{o.status.toLowerCase()}</TableCell>
+                    <TableCell className="capitalize">{o.status.toLowerCase()}</TableCell>
                   <TableCell>${(o.total / 100).toFixed(2)}</TableCell>
                   <TableCell>{new Date(o.updatedAt).toLocaleString()}</TableCell>
                   <TableCell>
