@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { InventoryAdjustSchema } from "@/lib/validation"
 import { getClientIp, logAdminAction } from "@/lib/security"
-import { nextStockState, recomputeProductInStock } from "@/lib/inventory"
+import { computeBoundedStockLevel, recomputeProductInStock } from "@/lib/inventory"
 
 export async function POST(req: NextRequest, { params }: { params: { productId: string } }) {
   const session = await auth()
@@ -29,10 +29,12 @@ export async function POST(req: NextRequest, { params }: { params: { productId: 
     delta = Math.abs(quantity)
   }
 
+  const allowBackorder = (process.env.ALLOW_BACKORDER || "false").toLowerCase() === "true"
+
   // Atomic transaction with serializable isolation to avoid race conditions
   const updated = await prisma.$transaction(async (tx) => {
     const fresh = await tx.product.findUnique({ where: { id: product.id }, select: { stockLevel: true } })
-    const { stockLevel } = nextStockState(fresh?.stockLevel ?? 0, delta)
+    const stockLevel = computeBoundedStockLevel(fresh?.stockLevel ?? 0, delta, allowBackorder)
     const upd = await tx.product.update({
       where: { id: product.id },
       data: {

@@ -14,6 +14,17 @@ export function nextStockState(current: number, delta: number): { stockLevel: nu
 }
 
 /**
+ * Compute bounded stock level given current and delta.
+ * If allowBackorder is false, clamp stock to zero minimum.
+ */
+export function computeBoundedStockLevel(current: number, delta: number, allowBackorder: boolean): number {
+  const cur = Number.isFinite(current) ? current : 0
+  const d = Number.isFinite(delta) ? delta : 0
+  const next = cur + d
+  return allowBackorder ? next : Math.max(0, next)
+}
+
+/**
  * Recompute inStock from a stockLevel.
  */
 export function recomputeInStock(stockLevel: number): boolean {

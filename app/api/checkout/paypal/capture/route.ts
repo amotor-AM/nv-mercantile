@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import paypal from "@paypal/checkout-server-sdk"
 import { prisma } from "@/lib/db"
+import { incCounter } from "@/lib/metrics"
+import { computeBoundedStockLevel, recomputeProductInStock } from "@/lib/inventory"
+import { sendOrderConfirmationEmail } from "@/lib/email"
 
 function getPayPalClient() {
   const env = process.env.PAYPAL_ENV || "sandbox"
@@ -30,10 +33,42 @@ export async function GET(req: NextRequest) {
   const purchase = (response.result.purchase_units || [])[0]
   const customId = purchase?.custom_id
   if (customId) {
-    await prisma.order.update({
+    const allowBackorder = (process.env.ALLOW_BACKORDER || "false").toLowerCase() === "true"
+    const order = await prisma.order.update({
       where: { id: customId },
       data: { status: "PAID", paymentProvider: "paypal" },
+      include: { items: true },
     })
+
+    // Idempotency guard per item: skip if SALE movement already exists for this order
+    for (const it of order.items) {
+      const already = await prisma.inventoryMovement.findFirst({
+        where: { productId: it.productId, type: "SALE", note: `Order ${order.orderNumber}` },
+      })
+      if (already) continue
+
+      const product = await prisma.product.findUnique({ where: { id: it.productId } })
+      if (!product) continue
+
+      const nextLevel = computeBoundedStockLevel(product.stockLevel ?? 0, -Math.abs(it.quantity), allowBackorder)
+      await prisma.product.update({
+        where: { id: it.productId },
+        data: { stockLevel: nextLevel },
+      })
+
+      await prisma.inventoryMovement.create({
+        data: {
+          productId: it.productId,
+          type: "SALE",
+          quantity: -Math.abs(it.quantity),
+          note: `Order ${order.orderNumber}`,
+        },
+      })
+
+      await recomputeProductInStock(prisma, it.productId)
+    }
+
+    await incCounter("payment_success")
   }
 
   return NextResponse.json({ ok: true })

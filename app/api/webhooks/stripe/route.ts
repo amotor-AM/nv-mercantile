@@ -5,9 +5,11 @@ import { sendOrderConfirmationEmail } from "@/lib/email"
 import { incCounter } from "@/lib/metrics"
 import { getClientIp, logAdminAction } from "@/lib/security"
 
-import { nextStockState, recomputeProductInStock } from "@/lib/inventory"
+import { computeBoundedStockLevel, recomputeProductInStock } from "@/lib/inventory"
 
 async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
+  const allowBackorder = (process.env.ALLOW_BACKORDER || "false").toLowerCase() === "true"
+
   // Update order and decrement stock from items
   const order = await prisma.order.update({
     where: { id: orderId },
@@ -15,15 +17,21 @@ async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
     include: { items: true },
   })
 
-  // Decrement stock and create inventory movements
+  // Idempotency guard: if SALE movements already exist for this order, skip processing
+  // This checks per item to also support partial order updates if necessary.
   for (const it of order.items) {
+    const already = await prisma.inventoryMovement.findFirst({
+      where: { productId: it.productId, type: "SALE", note: `Order ${order.orderNumber}` },
+    })
+    if (already) continue
+
     const product = await prisma.product.findUnique({ where: { id: it.productId } })
     if (!product) continue
-    const { stockLevel } = nextStockState(product.stockLevel ?? 0, -Math.abs(it.quantity))
+    const nextLevel = computeBoundedStockLevel(product.stockLevel ?? 0, -Math.abs(it.quantity), allowBackorder)
     await prisma.product.update({
       where: { id: it.productId },
       data: {
-        stockLevel, // set explicitly to avoid multiple writes
+        stockLevel: nextLevel, // set explicitly to avoid multiple writes
       },
     })
 
@@ -42,7 +50,7 @@ async function finalizePaidOrder(orderId: string, paymentIntentId?: string) {
   // Metrics: count successful payments
   await incCounter("payment_success")
 
-  // Send order confirmation email
+  // Send order confirmation email (best-effort)
   try {
     await sendOrderConfirmationEmail(orderId)
   } catch (e) {
