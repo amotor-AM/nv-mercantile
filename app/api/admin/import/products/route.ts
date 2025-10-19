@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { parse } from "csv-parse/sync"
 import { logAdminAction, getClientIp } from "@/lib/security"
+import { recomputeInStock } from "@/lib/inventory"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
       const cat = await prisma.category.findUnique({ where: { slug: categorySlug } })
       categoryId = cat?.id ?? undefined
     }
+    const stockLevel = Number(r.stockLevel ?? 0)
     const data: any = {
       slug,
       name: r.name || slug,
@@ -38,10 +40,10 @@ export async function POST(req: NextRequest) {
       material: r.material || "",
       leadTime: r.leadTime || "2-3 weeks",
       leadTimeDays: Number(r.leadTimeDays ?? 7),
-      stockLevel: Number(r.stockLevel ?? 0),
+      stockLevel,
       safetyStock: Number(r.safetyStock ?? 0),
       reorderPoint: Number(r.reorderPoint ?? 0),
-      inStock: String(r.inStock).toLowerCase() === "true",
+      inStock: recomputeInStock(stockLevel),
       description: r.description || "",
       image: r.image || "",
       dimensions: r.dimensions || "",

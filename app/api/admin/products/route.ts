@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { ProductCreateSchema } from "@/lib/validation"
 import { getClientIp, logAdminAction } from "@/lib/security"
+import { recomputeInStock } from "@/lib/inventory"
 
 export async function GET() {
   const session = await auth()
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
     const cat = await prisma.category.findUnique({ where: { slug: body.category } })
     categoryId = cat?.id ?? null
   }
+  const stockLevel = body.stockLevel ?? 0
   const created = await prisma.product.create({
     data: {
       slug: body.slug,
@@ -64,8 +66,8 @@ export async function POST(req: NextRequest) {
       weight: body.weight ?? "",
       specifications: body.specifications ?? {},
       applications: body.applications ?? [],
-      inStock: true,
-      stockLevel: body.stockLevel ?? 0,
+      inStock: recomputeInStock(stockLevel),
+      stockLevel,
       safetyStock: body.safetyStock ?? 0,
       reorderPoint: body.reorderPoint ?? 0,
       leadTimeDays: body.leadTimeDays ?? 7,

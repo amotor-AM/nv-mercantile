@@ -3,6 +3,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { ProductUpdateSchema } from "@/lib/validation"
 import { getClientIp, logAdminAction } from "@/lib/security"
+import { recomputeInStock } from "@/lib/inventory"
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -21,6 +22,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const cat = await prisma.category.findUnique({ where: { slug: (parsed.data as any).category } })
     data.categoryId = cat?.id ?? null
     delete data.category
+  }
+
+  // If stockLevel is being updated and inStock was not explicitly provided, recompute inStock
+  if (Object.prototype.hasOwnProperty.call(parsed.data, "stockLevel") && typeof parsed.data.stockLevel === "number" && !Object.prototype.hasOwnProperty.call(parsed.data, "inStock")) {
+    data.inStock = recomputeInStock(parsed.data.stockLevel)
   }
 
   const updated = await prisma.product.update({ where: { id: params.id }, data })

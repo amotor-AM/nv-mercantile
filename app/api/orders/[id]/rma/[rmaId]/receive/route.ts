@@ -5,6 +5,7 @@ import Stripe from "stripe"
 import { sendRefundEmail } from "@/lib/email"
 import { RmaReceiveSchema } from "@/lib/validation"
 import { getClientIp, logAdminAction } from "@/lib/security"
+import { nextStockState } from "@/lib/inventory"
 
 export async function POST(req: NextRequest, { params }: { params: { id: string; rmaId: string } }) {
   const session = await auth()
@@ -31,11 +32,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     const qty = Math.min(rec.qty, it.requestedQty)
     await prisma.returnItem.update({ where: { id: it.id }, data: { receivedQty: qty } })
     refundCents += qty * it.orderItem.price
-    // Restock returned quantity (optional)
-    await prisma.product.update({
-      where: { id: it.orderItem.productId },
-      data: { stockLevel: { increment: qty }, inStock: true },
-    })
+    // Restock returned quantity using consistent stock state computation
+    const product = await prisma.product.findUnique({ where: { id: it.orderItem.productId } })
+    if (product) {
+      const { stockLevel, inStock } = nextStockState(product.stockLevel ?? 0, qty)
+      await prisma.product.update({
+        where: { id: it.orderItem.productId },
+        data: { stockLevel, inStock },
+      })
+    }
     await prisma.inventoryMovement.create({
       data: { productId: it.orderItem.productId, type: "RESTOCK", quantity: qty, note: `RMA ${rma.id}` },
     })
