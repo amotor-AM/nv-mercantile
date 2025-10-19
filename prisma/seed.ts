@@ -184,11 +184,18 @@ async function seedAttributes() {
 }
 
 async function main() {
+  const mode = (process.env.SEED_MODE || "full").toLowerCase()
   await seedCategories()
-  await seedProducts(machined.products as ProductJson[])
-  await seedProducts(metalwork.products as ProductJson[])
-  await seedProducts(prints.products as ProductJson[])
-  await seedProducts(custom.products as ProductJson[])
+  if (mode === "ci" || mode === "minimal") {
+    // Seed a minimal set required for tests
+    const firstMachined = (machined.products as ProductJson[]).slice(0, 1)
+    await seedProducts(firstMachined)
+  } else {
+    await seedProducts(machined.products as ProductJson[])
+    await seedProducts(metalwork.products as ProductJson[])
+    await seedProducts(prints.products as ProductJson[])
+    await seedProducts(custom.products as ProductJson[])
+  }
   await seedNavigation()
   await seedAttributes()
   console.log("Seeded products:", await prisma.product.count())

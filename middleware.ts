@@ -31,13 +31,14 @@ export default auth((req) => {
       return NextResponse.redirect(new URL("/", nextUrl.origin))
     }
     const twoFactorEnabled = !!(req.auth as any).user?.twoFactorEnabled
+    const webauthnEnabled = !!(req.auth as any).user?.webauthnEnabled
     const twoFactorCookie = req.cookies.get("nv_2fa_ok")?.value
-    // If 2FA not enabled, force setup page
-    if (!twoFactorEnabled && !nextUrl.pathname.startsWith("/admin/security")) {
+    // If neither TOTP nor WebAuthn is enabled, force setup page
+    if (!twoFactorEnabled && !webauthnEnabled && !nextUrl.pathname.startsWith("/admin/security")) {
       return NextResponse.redirect(new URL("/admin/security", nextUrl.origin))
     }
-    // If enabled but not verified on this device, force challenge page
-    if (twoFactorEnabled && twoFactorCookie !== "true" && !nextUrl.pathname.startsWith("/admin/security/2fa")) {
+    // If at least one 2FA method is enabled but not verified on this device, force challenge page
+    if ((twoFactorEnabled || webauthnEnabled) && twoFactorCookie !== "true" && !nextUrl.pathname.startsWith("/admin/security/2fa")) {
       const url = new URL("/admin/security/2fa", nextUrl.origin)
       url.searchParams.set("redirect", nextUrl.href)
       return NextResponse.redirect(url)

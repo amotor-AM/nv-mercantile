@@ -1,12 +1,13 @@
 "use client"
 
 import useSWR from "swr"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { csrfHeader } from "@/lib/csrf"
+import { startRegistration } from "@simplewebauthn/browser"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -14,8 +15,20 @@ export default function AdminSecurityPage() {
   const [otpUri, setOtpUri] = useState<string | null>(null)
   const [verifyCode, setVerifyCode] = useState("")
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
+  const [creds, setCreds] = useState<any[]>([])
+  const [regName, setRegName] = useState("My Passkey")
+  const [webAuthnError, setWebAuthnError] = useState<string | null>(null)
 
   const { data: devices, mutate: refreshDevices } = useSWR("/api/auth/devices", fetcher)
+
+  async function refreshCreds() {
+    const res = await fetch("/api/auth/webauthn/credentials")
+    if (res.ok) setCreds(await res.json())
+  }
+
+  useEffect(() => {
+    refreshCreds()
+  }, [])
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
@@ -84,6 +97,71 @@ export default function AdminSecurityPage() {
             )}
           </div>
         )}
+      </Card>
+
+      <Card className="p-6 space-y-4">
+        <h2 className="text-xl font-semibold">Passkeys (WebAuthn)</h2>
+        {webAuthnError && <div className="text-sm text-destructive">{webAuthnError}</div>}
+        <div className="space-y-2">
+          <Label htmlFor="regname">Name</Label>
+          <Input id="regname" value={regName} onChange={(e) => setRegName(e.target.value)} />
+        </div>
+        <Button
+          onClick={async () => {
+            setWebAuthnError(null)
+            const o = await fetch("/api/auth/webauthn/register/options", { method: "POST", headers: { ...csrfHeader() } })
+            if (!o.ok) {
+              setWebAuthnError("Failed to start registration")
+              return
+            }
+            const opts = await o.json()
+            try {
+              const attestation = await startRegistration(opts)
+              const v = await fetch("/api/auth/webauthn/register/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...csrfHeader() },
+                body: JSON.stringify({ ...attestation, name: regName }),
+              })
+              if (v.ok) {
+                refreshCreds()
+              } else {
+                const err = await v.json().catch(() => ({}))
+                setWebAuthnError(err.error || "Verification failed")
+              }
+            } catch (e: any) {
+              setWebAuthnError(e?.message || "Registration cancelled")
+            }
+          }}
+        >
+          Register a Passkey
+        </Button>
+
+        <div className="mt-4 space-y-2">
+          {creds.length ? (
+            creds.map((c) => (
+              <div key={c.id} className="flex items-center justify-between border rounded p-3">
+                <div>
+                  <div className="font-medium">{c.name || "Passkey"}</div>
+                  <div className="text-sm text-muted-foreground">Added: {new Date(c.createdAt).toLocaleString()}</div>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    await fetch(`/api/auth/webauthn/credentials/${c.id}`, {
+                      method: "DELETE",
+                      headers: { ...csrfHeader() },
+                    })
+                    refreshCreds()
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))
+          ) : (
+            <div className="text-sm text-muted-foreground">No passkeys registered</div>
+          )}
+        </div>
       </Card>
 
       <Card className="p-6 space-y-4">

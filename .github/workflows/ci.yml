@@ -14,6 +14,7 @@ jobs:
       DATABASE_URL: file:./ci.db
       NEXTAUTH_SECRET: test_secret
       LOG_LEVEL: info
+      SEED_MODE: ci
     steps:
       - name: Checkout
         uses: actions/checkout@v4

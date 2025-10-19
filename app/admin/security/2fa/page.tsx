@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { csrfHeader } from "@/lib/csrf"
+import { startAuthentication } from "@simplewebauthn/browser"
 
 export default function TwoFactorChallengePage() {
   const params = useSearchParams()
@@ -48,24 +49,59 @@ export default function TwoFactorChallengePage() {
             <Input id="devicename" value={deviceName} onChange={(e) => setDeviceName(e.target.value)} />
           </div>
         )}
-        <Button
-          onClick={async () => {
-            setError(null)
-            const res = await fetch("/api/auth/2fa/challenge", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", ...csrfHeader() },
-              body: JSON.stringify({ token, backupCode, rememberDevice: remember, deviceName }),
-            })
-            if (res.ok) {
-              router.push(redirect)
-            } else {
-              const data = await res.json().catch(() => ({}))
-              setError(data.error || "Verification failed")
-            }
-          }}
-        >
-          Verify
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={async () => {
+              setError(null)
+              const res = await fetch("/api/auth/2fa/challenge", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...csrfHeader() },
+                body: JSON.stringify({ token, backupCode, rememberDevice: remember, deviceName }),
+              })
+              if (res.ok) {
+                router.push(redirect)
+              } else {
+                const data = await res.json().catch(() => ({}))
+                setError(data.error || "Verification failed")
+              }
+            }}
+          >
+            Verify
+          </Button>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              setError(null)
+              const o = await fetch("/api/auth/webauthn/authenticate/options", {
+                method: "POST",
+                headers: { ...csrfHeader() },
+              })
+              if (!o.ok) {
+                setError("Passkey options failed")
+                return
+              }
+              const opts = await o.json()
+              try {
+                const assertion = await startAuthentication(opts)
+                const v = await fetch("/api/auth/webauthn/authenticate/verify", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", ...csrfHeader() },
+                  body: JSON.stringify(assertion),
+                })
+                if (v.ok) {
+                  router.push(redirect)
+                } else {
+                  const data = await v.json().catch(() => ({}))
+                  setError(data.error || "Passkey verification failed")
+                }
+              } catch (e: any) {
+                setError(e?.message || "Passkey cancelled")
+              }
+            }}
+          >
+            Use Passkey
+          </Button>
+        </div>
       </div>
     </div>
   )

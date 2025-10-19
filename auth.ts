@@ -39,6 +39,12 @@ export const {
         ;(session.user as any).id = user.id
         ;(session.user as any).role = (user as any).role ?? "CUSTOMER"
         ;(session.user as any).twoFactorEnabled = !!(user as any).twoFactorEnabled
+        try {
+          const count = await prisma.webAuthnCredential.count({ where: { userId: user.id } })
+          ;(session.user as any).webauthnEnabled = count > 0
+        } catch {
+          ;(session.user as any).webauthnEnabled = false
+        }
       }
       return session
     },
