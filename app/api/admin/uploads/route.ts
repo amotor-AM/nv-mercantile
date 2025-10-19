@@ -37,6 +37,31 @@ export async function POST(req: NextRequest) {
   }
 
   const bytes = Buffer.from(await file.arrayBuffer())
+
+  // Validate magic bytes
+  function hasValidSignature(buf: Buffer, mime: string): boolean {
+    if (mime === "image/png") {
+      const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+      for (let i = 0; i < sig.length; i++) if (buf[i] !== sig[i]) return false
+      return true
+    }
+    if (mime === "image/jpeg") {
+      return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff
+    }
+    if (mime === "image/webp") {
+      const riff = buf.slice(0, 4).toString("ascii") === "RIFF"
+      const webp = buf.slice(8, 12).toString("ascii") === "WEBP"
+      return riff && webp
+    }
+    if (mime === "application/pdf") {
+      return buf.slice(0, 5).toString("ascii") === "%PDF-"
+    }
+    return false
+  }
+  if (!hasValidSignature(bytes, type)) {
+    return NextResponse.json({ error: "Invalid file signature" }, { status: 400 })
+  }
+
   const uploadsDir = path.join(process.cwd(), "public", "uploads")
   await fs.mkdir(uploadsDir, { recursive: true })
   const ext = EXT_BY_MIME[type] || "bin"

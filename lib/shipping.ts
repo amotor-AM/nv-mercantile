@@ -164,13 +164,18 @@ export async function createShipmentAndMaybePurchaseLabel(params: CreateShipment
   // Build basic address objects. For real carriers you'd want structured addresses.
   const toAddress: any = {
     name: order.shippingName || order.email,
-    street1: order.shippingAddress,
+    street1: order.shippingAddress1 || order.shippingAddress || undefined,
+    street2: order.shippingAddress2 || undefined,
+    city: order.shippingCity || undefined,
+    state: order.shippingState || undefined,
+    zip: order.shippingPostalCode || undefined,
     phone: order.shippingPhone || undefined,
-    country: "US",
+    country: order.shippingCountry || "US",
   }
   const fromAddress: any = {
     name: process.env.SHIP_FROM_NAME || "Warehouse",
     street1: process.env.SHIP_FROM_ADDRESS || "123 Warehouse St",
+    street2: process.env.SHIP_FROM_ADDRESS2 || undefined,
     city: process.env.SHIP_FROM_CITY || undefined,
     state: process.env.SHIP_FROM_STATE || undefined,
     zip: process.env.SHIP_FROM_ZIP || undefined,

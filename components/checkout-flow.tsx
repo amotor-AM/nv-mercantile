@@ -16,11 +16,83 @@ import { track } from "@vercel/analytics"
 import { csrfHeader } from "@/lib/csrf"
 import Image from "next/image"
 
+function useGooglePlacesAutocomplete(setFormData: (updater: (prev: CheckoutFormData) => CheckoutFormData) => void) {
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    if (!apiKey) return
+
+    function injectScript() {
+      return new Promise<void>((resolve, reject) => {
+        if (typeof window !== "undefined" && (window as any).google?.maps?.places) {
+          resolve()
+          return
+        }
+        const script = document.createElement("script")
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+        script.async = true
+        script.onload = () => resolve()
+        script.onerror = (e) => reject(e)
+        document.head.appendChild(script)
+      })
+    }
+
+    let autocomplete: any
+    injectScript()
+      .then(() => {
+        const input = document.getElementById("addressLine1") as HTMLInputElement | null
+        if (!input || !(window as any).google?.maps?.places) return
+        const places = (window as any).google.maps.places
+        autocomplete = new places.Autocomplete(input, {
+          types: ["address"],
+          fields: ["address_components", "geometry"],
+        })
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace()
+          if (!place) return
+          const comps = place.address_components || []
+          const getComp = (type: string) => comps.find((c: any) => c.types.includes(type))
+          const streetNumber = getComp("street_number")?.short_name || ""
+          const route = getComp("route")?.short_name || ""
+          const locality = getComp("locality")?.short_name || getComp("postal_town")?.short_name || ""
+          const admin1 = getComp("administrative_area_level_1")?.short_name || ""
+          const postal = getComp("postal_code")?.short_name || ""
+          const country = getComp("country")?.short_name || "US"
+          const geometry = place.geometry
+
+          setFormData((prev) => ({
+            ...prev,
+            addressLine1: [streetNumber, route].filter(Boolean).join(" "),
+            city: locality,
+            state: admin1,
+            postalCode: postal,
+            country,
+            lat: geometry?.location?.lat() ?? prev.lat,
+            lng: geometry?.location?.lng() ?? prev.lng,
+          }))
+        })
+      })
+      .catch(() => {
+        // ignore script load errors
+      })
+
+    return () => {
+      // no cleanup needed for Google Autocomplete
+    }
+  }, [setFormData])
+}
+
 interface CheckoutFormData {
   email: string
   firstName: string
   lastName: string
-  address: string
+  addressLine1: string
+  addressLine2: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+  lat?: number
+  lng?: number
   phoneNumber: string
   paymentMethod: string
   saveInfo: boolean
@@ -174,6 +246,7 @@ function StripeReviewAndPlaceOrder(props: {
 
 export function CheckoutFlow() {
   const { items, getTotalPrice, clearCart } = useCartStore()
+  useGooglePlacesAutocomplete((updater) => setFormData((prev) => updater(prev)))
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -242,7 +315,14 @@ export function CheckoutFlow() {
         shipping: {
           name: `${formData.firstName} ${formData.lastName}`,
           phone: formData.phoneNumber,
-          address: formData.address,
+          addressLine1: formData.addressLine1,
+          addressLine2: formData.addressLine2,
+          city: formData.city,
+          state: formData.state,
+          postalCode: formData.postalCode,
+          country: formData.country,
+          lat: formData.lat,
+          lng: formData.lng,
         },
       }),
     })
@@ -391,16 +471,59 @@ export function CheckoutFlow() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="address">Shipping Address</Label>
-                <Input
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => handleInputChange("address", e.target.value)}
-                  placeholder="Full Address"
-                  aria-invalid={!formData.address ? true : undefined}
-                />
-              </div>
+              <div className="grid grid-cols-1 gap-3">
+               <ddiv>
+                 < Label htmlFor="addressLine1">Address Line</
+ Label>
+                 <oInput
+                    id="addressLine1"
+                    value={formData.addressLine1}
+                    onChange={(e) => handleInputChange("addressLine1", e.target.value)}
+                    placeholder="Street address"
+                    aria-invalid={!formData.addressLine1 ? true : undefined}
+                  />
+              </  div>
+               < div>
+                 < Label htmlFor="addressLine2">Address Line</ 2Label>
+                 < Input
+                    id="addressLine2"
+                    value={formData.addressLine2}
+                    onChange={(e) => handleInputChange("addressLine2", e.target.value)}
+                    placeholder="Apt, suite, unit (optional)"
+                  />
+              </  div>
+               < div className="grid grid-cols-3 gap-3">
+                 < div>
+                   < Label htmlFor="city">Ci</tyLabel>
+                   < Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => handleInputChange("city", e.target.value)}
+                      aria-invalid={!formData.city ? true : undefined}
+                    />
+                </  div>
+                 < div>
+                   < Label htmlFor="state">Sta</teLabel>
+                   < Input
+                      id="state"
+                      value={formData.state}
+                      onChange={(e) => handleInputChange("state", e.target.value)}
+                      aria-invalid={!formData.state ? true : undefined}
+                    />
+                </  div>
+                 < div>
+                   < Label htmlFor="postalCode">Postal Co</deLabel>
+                   < Input
+                      id="postalCode"
+                      value={formData.postalCode}
+                      onChange={(e) => handleInputChange("postalCode", e.target.value)}
+                      aria-invalid={!formData.postalCode ? true : undefined}
+                    />
+                </  div>
+              </  div>
+               < div>
+                 < Label htmlFor="country">Count</ryLabel>
+                 < >
 
               <Button
                 onClick={() => handleStepComplete(1)}

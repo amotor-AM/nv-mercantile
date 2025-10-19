@@ -45,7 +45,17 @@ export const OrderCreateSchema = z.object({
     .object({
       name: z.string().min(1).max(200).optional(),
       phone: z.string().min(7).max(30).optional(),
+      // Legacy full address
       address: z.string().min(3).max(500).optional(),
+      // Structured address fields
+      addressLine1: z.string().min(3).max(200).optional(),
+      addressLine2: z.string().max(200).optional(),
+      city: z.string().max(100).optional(),
+      state: z.string().max(100).optional(),
+      postalCode: z.string().max(20).optional(),
+      country: z.string().max(2).optional(),
+      lat: z.number().optional(),
+      lng: z.number().optional(),
     })
     .optional(),
 })

@@ -108,7 +108,17 @@ model Order {
   shipments       Shipment[]
   shippingName    String?
   shippingPhone   String?
+  // Legacy full address fallback
   shippingAddress String?
+  // Structured shipping address
+  shippingAddress1 String?
+  shippingAddress2 String?
+  shippingCity     String?
+  shippingState    String?
+  shippingPostalCode String?
+  shippingCountry  String?     @default("US")
+  shippingLat      Float?
+  shippingLng      Float?
   trackingCarrier String?
   trackingNumber  String?
   trackingUrl     String?
